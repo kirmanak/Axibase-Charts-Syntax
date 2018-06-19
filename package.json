@@ -1,0 +1,26 @@
+{
+    "name": "axibase-visualization-syntax",
+    "displayName": "Axibase Visualization Syntax",
+    "description": "A syntax highlighting and code prettifier extension for Axibase Visualization",
+    "version": "0.0.1",
+    "publisher": "Axibase",
+    "engines": {
+        "vscode": "^1.24.0"
+    },
+    "categories": [
+        "Programming Languages"
+    ],
+    "contributes": {
+        "languages": [{
+            "id": "atsd-visual",
+            "aliases": ["ATSD Visualization", "atsd-visual"],
+            "extensions": [".av"],
+            "configuration": "./language-configuration.json"
+        }],
+        "grammars": [{
+            "language": "atsd-visual",
+            "scopeName": "main.av",
+            "path": "./syntaxes/atsd-visual.tmLanguage.json"
+        }]
+    }
+}
