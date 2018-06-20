@@ -1,0 +1,105 @@
+[configuration]
+  width-units = 1
+  height-units = 1
+  update-interval = 15 second
+
+  # this is a comment # */ it can't be closed
+  /* hello this is a comment too*/ 
+  
+  [widget]
+    type = graph
+    mode = hierarchy
+    bundle = false
+    link-animate = true
+    
+    link-thresholds = percentile(50), percentile(75), percentile(95)
+    link-widths = 1, 1, 3
+    link-colors = silver, green, orange
+
+    [node]
+      id = nurswgvml007
+
+    [node]
+      id = SWIFT.QM1
+      parent = nurswgvml007
+
+    [node]
+      id = nurswgvml006
+      
+    [node]
+      id = WPS.QM1
+      parent = nurswgvml006      
+
+    [node]
+      id = WPS.QM2
+      parent = nurswgvml006
+
+    [node]
+      id = nurswgvml201
+
+    [node]
+      id = BIZTALK.QM7
+      parent = nurswgvml201
+
+    [node]
+      id = MQMGR01
+
+    [node]
+      id = mgr_B805B19C
+      label = MQMGR01.QM
+      parent = MQMGR01
+
+    [node]
+      id = DPOWER004
+
+    [node]
+      id = DP.QM2
+      parent = DPOWER004
+
+    [link]
+      label = SWIFT.WPS.1.CH
+      nodes = SWIFT.QM1 -> WPS.QM1
+      [series]
+        links = SWIFT.QM1 -> WPS.QM1
+        entity = SWIFT.QM1:nurswgvml007:MQ
+        table = Channel_Statistics
+        attribute = Message_Count
+        [tags]
+        Channel_Name = SWIFT.WPS.1.CH
+        MQ_Manager_Name = SWIFT.QM1
+        
+    [link]
+      label = SWIFT.WPS.2.CH
+      nodes = SWIFT.QM1 -> WPS.QM2
+      [series]
+        links = SWIFT.QM1 -> WPS.QM2
+        entity = SWIFT.QM1:nurswgvml007:MQ
+        table = Channel_Statistics
+        attribute = Message_Count
+        [tags]
+        Channel_Name = SWIFT.WPS.2.CH
+        MQ_Manager_Name = WPS.QM2 
+        
+    [link]
+      label = DP.MQMGR01.CH
+      nodes = mgr_B805B19C -> DP.QM2
+      [series]
+        links = mgr_B805B19C -> DP.QM2
+        entity = DP.QM2::MQ
+        table = Channel_Statistics
+        attribute = Message_Count
+        [tags]
+        Channel_Name = DP.MQMGR01.CH
+        MQ_Manager_Name = DP.QM2
+        
+    [link]
+      label = BIZTALK.SW.CH
+      nodes = BIZTALK.QM7 - SWIFT.QM1
+      [series]
+        links = BIZTALK.QM7 -SWIFT.QM1
+        entity = BIZTALK.QM7:nurswgvml201:MQ
+        table = Channel_Statistics
+        attribute = Message_Count
+        [tags]
+        Channel_Name = BIZTALK.SW.CH
+        MQ_Manager_Name = BIZTALK.QM7

@@ -19,7 +19,7 @@
         }],
         "grammars": [{
             "language": "atsd-visual",
-            "scopeName": "main.av",
+            "scopeName": "source.av",
             "path": "./syntaxes/atsd-visual.tmLanguage.json"
         }]
     }
