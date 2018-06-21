@@ -32,7 +32,7 @@
 				}, 
 				{
 					"name": "variable.name",
-					"match": ".+?(?=(=))"
+					"match": ".+?(?==)"
 				},
 				{
 					"name": "constant.regexp",
