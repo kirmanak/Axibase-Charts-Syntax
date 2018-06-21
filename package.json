@@ -3,6 +3,10 @@
     "displayName": "Axibase Visualization Syntax",
     "description": "A syntax highlighting and code prettifier extension for Axibase Visualization",
     "version": "0.0.1",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/kirmanak/VSCode-ATSD-Extension"
+    },
     "publisher": "Axibase",
     "engines": {
         "vscode": "^1.24.0"
@@ -11,16 +15,43 @@
         "Programming Languages"
     ],
     "contributes": {
-        "languages": [{
-            "id": "atsd-visual",
-            "aliases": ["ATSD Visualization", "atsd-visual"],
-            "extensions": [".av"],
-            "configuration": "./language-configuration.json"
-        }],
-        "grammars": [{
-            "language": "atsd-visual",
-            "scopeName": "source.av",
-            "path": "./syntaxes/atsd-visual.tmLanguage.json"
-        }]
+        "languages": [
+            {
+                "id": "atsd-visual",
+                "aliases": [
+                    "ATSD Visualization",
+                    "atsd-visual"
+                ],
+                "extensions": [
+                    ".av"
+                ],
+                "configuration": "./language-configuration.json"
+            }
+        ],
+        "grammars": [
+            {
+                "language": "atsd-visual",
+                "scopeName": "source.av",
+                "path": "./syntaxes/atsd-visual.tmLanguage.json"
+            }
+        ]
+    },
+    "main": "./client/out/extension",
+    "activationEvents": [
+        "onLanguage:atsd-visual"
+    ],
+    "scripts": {
+        "vscode:prepublish": "cd client && npm run update-vscode && cd .. && npm run compile",
+        "compile:client": "tsc -p ./client/tsconfig.json",
+        "compile:server": "tsc -p ./server/tsconfig.json",
+        "watch:client": "tsc -w -p ./client/tsconfig.json",
+        "watch:server": "tsc -w -p ./server/tsconfig.json",
+        "compile": "npm run compile:client && npm run compile:server",
+        "postinstall": "cd client && npm install && cd ../server && npm install && cd .."
+    },
+    "devDependencies": {
+        "@types/mocha": "^5.2.0",
+        "@types/node": "^8.0.0",
+        "typescript": "2.8.3"
     }
 }
