@@ -28,15 +28,19 @@
 				},
 				{
 					"name": "comment.line.number-sign",
-					"match": "#.*$"
+					"match": "#.++"
 				}, 
 				{
 					"name": "variable.name",
-					"match": "\\b[a-zA-Z][-_a-zA-Z0-9]+(?= ?=)\\b"
+					"match": ".+?(?=(=))"
+				},
+				{
+					"name": "constant.regexp",
+					"match": "(?<==).++"
 				},
 				{
 					"name": "constant.numeric",
-					"match": "\\b[0-9]+\\b"
+					"match": "\\b[0-9]+?\\b"
 				}
 			]
 		}
