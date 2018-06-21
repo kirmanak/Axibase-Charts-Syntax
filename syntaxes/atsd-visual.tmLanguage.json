@@ -10,25 +10,33 @@
 		"keywords": {
 			"patterns": [
 				{
-					"name": "keyword.other.unit.atsd-visual",
+					"name": "entity.name.class",
 					"match": "\\[(configuration|widget|series|tags|group|node|link)\\]"
 				},
 				{
-					"name": "keyword.control.atsd-visual",
+					"name": "keyword.control",
 					"match": "\\b(for|endfor|in|list)\\b"
 				},
 				{
-					"name": "comment.block.atsd-visual",
+					"name": "keyword.operator",
+					"match": "="
+				},
+				{
+					"name": "comment.block",
 					"begin": "/\\*",
 					"end": "\\*/"
 				},
 				{
-					"name": "comment.line.atsd-visual",
+					"name": "comment.line.number-sign",
 					"match": "#.*$"
+				}, 
+				{
+					"name": "variable.name",
+					"match": "\\b[a-zA-Z][-_a-zA-Z0-9]+\\b"
 				},
 				{
-					"name": "variable.name.atsd-visual",
-					"match": "\\b[-a-zA-Z_]+[-a-zA-Z_0-9]+\\b"
+					"name": "constant.numeric",
+					"match": "[0-9]+"
 				}
 			]
 		}
