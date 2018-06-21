@@ -1,7 +1,7 @@
 'use strict';
 
 import {
-	createConnection, TextDocuments, TextDocument, Diagnostic, DiagnosticSeverity,
+	createConnection, TextDocuments, TextDocument, Diagnostic, // DiagnosticSeverity,
 	ProposedFeatures, InitializeParams, DidChangeConfigurationNotification
 } from 'vscode-languageserver';
 
@@ -15,7 +15,7 @@ let documents: TextDocuments = new TextDocuments();
 
 let hasConfigurationCapability: boolean = false;
 let hasWorkspaceFolderCapability: boolean = false;
-let hasDiagnosticRelatedInformationCapability: boolean = false;
+//let hasDiagnosticRelatedInformationCapability: boolean = false;
 
 
 connection.onInitialize((params: InitializeParams) => {
@@ -25,7 +25,7 @@ connection.onInitialize((params: InitializeParams) => {
 	// If not, we will fall back using global settings
 	hasConfigurationCapability = capabilities.workspace && !!capabilities.workspace.configuration;
 	hasWorkspaceFolderCapability = capabilities.workspace && !!capabilities.workspace.workspaceFolders;
-	hasDiagnosticRelatedInformationCapability = capabilities.textDocument && capabilities.textDocument.publishDiagnostics && capabilities.textDocument.publishDiagnostics.relatedInformation;
+	//hasDiagnosticRelatedInformationCapability = capabilities.textDocument && capabilities.textDocument.publishDiagnostics && capabilities.textDocument.publishDiagnostics.relatedInformation;
 
 	return {
 		capabilities: {
@@ -54,25 +54,25 @@ interface ServerSettings {
 // The global settings, used when the `workspace/configuration` request is not supported by the client.
 // Please note that this is not the case when using this server with the client provided in this example
 // but could happen with other clients.
-const defaultSettings: ServerSettings = { maxNumberOfProblems: 1000 };
-let globalSettings: ServerSettings = defaultSettings;
+//const defaultSettings: ServerSettings = { maxNumberOfProblems: 1000 };
+//let globalSettings: ServerSettings = defaultSettings;
 
 // Cache the settings of all open documents
 let documentSettings: Map<string, Thenable<ServerSettings>> = new Map();
 
-connection.onDidChangeConfiguration(change => {
+connection.onDidChangeConfiguration(_change => {
 	if (hasConfigurationCapability) {
 		// Reset all cached document settings
 		documentSettings.clear();
 	} else {
-		globalSettings = <ServerSettings>(change.settings.languageServer || defaultSettings);
+		//globalSettings = <ServerSettings>(change.settings.languageServer || defaultSettings);
 	}
 
 	// Revalidate all open text documents
 	documents.all().forEach(validateTextDocument);
 });
 
-function getDocumentSettings(resource: string): Thenable<ServerSettings> {
+/*function getDocumentSettings(resource: string): Thenable<ServerSettings> {
 	if (!hasConfigurationCapability) {
 		return Promise.resolve(globalSettings);
 	}
@@ -82,7 +82,7 @@ function getDocumentSettings(resource: string): Thenable<ServerSettings> {
 		documentSettings.set(resource, result);
 	}
 	return result;
-}
+}*/
 
 // Only keep settings for open documents
 documents.onDidClose(e => {
@@ -95,19 +95,13 @@ documents.onDidChangeContent((change) => {
 	validateTextDocument(change.document);
 });
 
-async function validateTextDocument(textDocument: TextDocument): Promise<void> {
-	// In this simple example we get the settings for every validate run.
-	let settings = await getDocumentSettings(textDocument.uri);
-
-	// The validator creates diagnostics for all uppercase words length 2 and more
+function validateTextDocument(textDocument: TextDocument) {
+	/* The validator creates diagnostics for all uppercase words length 2 and more
 	let text = textDocument.getText();
-	let pattern = /\b[A-Z]{2,}\b/g;
+	
 	let m: RegExpExecArray;
 
-	let problems = 0;
-	let diagnostics: Diagnostic[] = [];
-	while ((m = pattern.exec(text)) && problems < settings.maxNumberOfProblems) {
-		problems++;
+	while ((m = pattern.exec(text))) {
 		let diagnostic: Diagnostic = {
 			severity: DiagnosticSeverity.Warning,
 			range: {
@@ -136,10 +130,38 @@ async function validateTextDocument(textDocument: TextDocument): Promise<void> {
 			];
 		}
 		diagnostics.push(diagnostic);
-	}
-
+	}*/
+	let diagnostics: Diagnostic[] = [];
+	findIncompleteLoops(textDocument).forEach(element => {
+		diagnostics.push(element);
+	});
+	
 	// Send the computed diagnostics to VSCode.
 	connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
+}
+
+function findIncompleteLoops(textDocument: TextDocument): Diagnostic[] {
+	let result: Diagnostic[] = [];
+
+	let text = textDocument.getText();
+	let for_pattern = /\bfor\b/g;
+	let endfor_pattern = /\bendfor\b/g;
+	
+	let for_result: RegExpExecArray;
+	
+	while(for_result = for_pattern.exec(text)) {
+		if (endfor_pattern.exec(text) == null) {
+			result.push({
+				range: {
+					start: textDocument.positionAt(for_result.index),
+					end: textDocument.positionAt(for_result.index + for_result[0].length)
+				},
+				message: "Matching endfor not found"
+			})
+		}
+	}
+
+	return result;
 }
 
 connection.onDidChangeWatchedFiles((_change) => {
