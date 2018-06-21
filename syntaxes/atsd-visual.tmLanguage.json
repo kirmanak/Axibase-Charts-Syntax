@@ -19,7 +19,7 @@
 				},
 				{
 					"name": "keyword.operator",
-					"match": "="
+					"match": "\\b(->|=)\\b"
 				},
 				{
 					"name": "comment.block",
@@ -32,11 +32,11 @@
 				}, 
 				{
 					"name": "variable.name",
-					"match": "\\b[a-zA-Z][-_a-zA-Z0-9]+\\b"
+					"match": "\\b[a-zA-Z][-_a-zA-Z0-9]+(?= ?=)\\b"
 				},
 				{
 					"name": "constant.numeric",
-					"match": "[0-9]+"
+					"match": "\\b[0-9]+\\b"
 				}
 			]
 		}
