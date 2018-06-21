@@ -19,7 +19,8 @@
 				},
 				{
 					"name": "comment.block.atsd-visual",
-					"match": "/\\*.*\\*/"
+					"begin": "/\\*",
+					"end": "\\*/"
 				},
 				{
 					"name": "comment.line.atsd-visual",
