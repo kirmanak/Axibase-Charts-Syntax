@@ -1,5 +1,5 @@
 [configuration]
-  height-units = 1
+	height-units = 1
   width-units = 1
   display-panels = true
   expand-panels = all

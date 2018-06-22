@@ -1,0 +1,22 @@
+{
+	"name": "atsd-visual-client",
+	"description": "VSCode part of a language server",
+	"author": "Axibase",
+	"version": "0.0.1",
+	"publisher": "vscode",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/Mkirmanak/ATSD-Visual-Extension"
+	},
+	"engines": {
+		"vscode": "^1.23.0"
+	},
+	"scripts": {
+		"update-vscode": "node ./node_modules/vscode/bin/install",
+		"postinstall": "node ./node_modules/vscode/bin/install"
+	},
+	"dependencies": {
+		"vscode": "^1.1.18",
+		"vscode-languageclient": "^4.1.4"
+	}
+}
