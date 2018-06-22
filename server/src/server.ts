@@ -67,18 +67,17 @@ function forLoops(textDocument: TextDocument): Diagnostic[] {
 	let result: Diagnostic[] = [];
 
 	let text = textDocument.getText();
-	let forPattern = /\bfor\s+(\w+)\s+in\s+(\w+)/g;
-	let variablePattern = /\@\{(\w+)\}/;
+	let forPattern = /\bfor\s+(\w+)\s+in\s+\w+/g;
+	let variablePattern = /\@\{(\w+)\}/g;
 	let endForPattern = /\bendfor\b/g;
 
 	let matchingFor: RegExpExecArray;
 	let matchingVariable: RegExpExecArray;
 
 	while (matchingFor = forPattern.exec(text)) {
-		let variableName = matchingFor[1];
-		if (matchingVariable = variablePattern.exec(text)) {
+		while (matchingVariable = variablePattern.exec(text)) {
 			let foundVar = matchingVariable[1];
-			if (foundVar != variableName) {
+			if (foundVar != matchingFor[1]) {
 				let diagnostic: Diagnostic = {
 					severity: DiagnosticSeverity.Error,
 					range: {
@@ -95,7 +94,7 @@ function forLoops(textDocument: TextDocument): Diagnostic[] {
 								uri: textDocument.uri,
 								range: diagnostic.range
 							},
-							message: `For loop variable is ${variableName}, but found ${foundVar}`
+							message: `For loop variable is ${matchingVariable[1]}, but found ${foundVar}`
 						}
 					];
 				}
@@ -109,7 +108,7 @@ function forLoops(textDocument: TextDocument): Diagnostic[] {
 					start: textDocument.positionAt(matchingFor.index),
 					end: textDocument.positionAt(matchingFor.index + matchingFor[0].length)
 				},
-				message: "Matching endfor not found",
+				message: "Matching 'endfor' not found",
 				source: diagnosticSource
 			};
 			if (hasDiagnosticRelatedInformationCapability) {
@@ -119,7 +118,7 @@ function forLoops(textDocument: TextDocument): Diagnostic[] {
 							uri: textDocument.uri,
 							range: diagnostic.range
 						},
-						message: "For keyword has no matching endfor keyword"
+						message: "'For' keyword has no matching 'endfor' keyword"
 					}
 				];
 			}
