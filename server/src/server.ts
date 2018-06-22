@@ -58,7 +58,7 @@ function validateTextDocument(textDocument: TextDocument) {
 	forLoops(textDocument).forEach(element => {
 		diagnostics.push(element);
 	});
-	
+
 	// Send the computed diagnostics to VSCode.
 	connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
 }
@@ -69,10 +69,10 @@ function forLoops(textDocument: TextDocument): Diagnostic[] {
 	let text = textDocument.getText();
 	let for_pattern = /\bfor\b/g;
 	let endfor_pattern = /\bendfor\b/g;
-	
+
 	let for_result: RegExpExecArray;
-	
-	while(for_result = for_pattern.exec(text)) {
+
+	while (for_result = for_pattern.exec(text)) {
 		if (endfor_pattern.exec(text) == null) {
 			let diagnostic: Diagnostic = {
 				severity: DiagnosticSeverity.Error,
@@ -87,8 +87,8 @@ function forLoops(textDocument: TextDocument): Diagnostic[] {
 				diagnostic.relatedInformation = [
 					{
 						location: {
-								uri: textDocument.uri,
-								range: diagnostic.range
+							uri: textDocument.uri,
+							range: diagnostic.range
 						},
 						message: "For keyword has no matching endfor keyword"
 					}
@@ -108,29 +108,35 @@ connection.onDidChangeWatchedFiles((_change) => {
 
 connection.onDocumentFormatting((params: DocumentFormattingParams): TextEdit[] => {
 	let edits: TextEdit[] = [];
-	sectionsWhitespaces(params).forEach((edit) => {
+	extraTextSectionLine(params).forEach((edit) => {
 		edits.push(edit);
 	});
-	
+
 	return edits;
 });
 
-function sectionsWhitespaces(params: DocumentFormattingParams): TextEdit[] {
+function extraTextSectionLine(params: DocumentFormattingParams): TextEdit[] {
 	let edits: TextEdit[] = [];
 	let document = documents.get(params.textDocument.uri);
 	let text = document.getText();
-	let target = /.*\[.*\].+/g; // incorrect formatting
-	let purpose = /\s*\[.*\]/; // correct formatting
+	let target = /(.*)\[.*\](.*)/g; // incorrect formatting
+	let purpose = /\[.*\]/; // correct formatting
+	let nonWhiteSpace = /\s*\S+\s*/;
 	let matching: RegExpExecArray;
 
 	while (matching = target.exec(text)) {
-		let substr = purpose.exec(matching[0])[0];
+		let incorrectLine = matching[0];
+		let substr = purpose.exec(incorrectLine)[0];
+		let before = matching[1];
+		let after = matching[2];
+		let newText = (nonWhiteSpace.test(before)) ? before + '\n' + substr : substr;
+		if (nonWhiteSpace.test(after)) newText += '\n\t' + after;
 		let edit: TextEdit = {
 			range: {
 				start: document.positionAt(matching.index),
-				end: document.positionAt(matching.index + matching[0].length)
+				end: document.positionAt(matching.index + incorrectLine.length)
 			},
-			newText: substr
+			newText: newText
 		};
 		edits.push(edit);
 	}
