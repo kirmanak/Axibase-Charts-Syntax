@@ -38,3 +38,8 @@ for server in servers
     period = 10 minute      
 endfor
 
+for srv in servers
+[series]
+  entity = @{srv}
+  data-type = forecast
+endfor

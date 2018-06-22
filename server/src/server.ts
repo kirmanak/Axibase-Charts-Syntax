@@ -55,7 +55,7 @@ documents.onDidChangeContent((change) => {
 
 function validateTextDocument(textDocument: TextDocument) {
 	let diagnostics: Diagnostic[] = [];
-	forLoops(textDocument).forEach(element => {
+	undefinedForVariables(textDocument).forEach(element => {
 		diagnostics.push(element);
 	});
 
@@ -63,28 +63,29 @@ function validateTextDocument(textDocument: TextDocument) {
 	connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
 }
 
-function forLoops(textDocument: TextDocument): Diagnostic[] {
-	let result: Diagnostic[] = [];
+function undefinedForVariables(textDocument: TextDocument): Diagnostic[] {
+	const result: Diagnostic[] = [];
 
-	let text = textDocument.getText();
-	let forPattern = /\bfor\s+(\w+)\s+in\s+\w+/g;
-	let variablePattern = /\@\{(\w+)\}/g;
-	let endForPattern = /\bendfor\b/g;
+	const text = textDocument.getText();
+	const forPattern = /(for\s(\w+?)\sin\s\w+?)\s([\s\S]*?)\sendfor/gm;
+	const variablePattern = /@\{(\w+)\}/g;
 
 	let matchingFor: RegExpExecArray;
-	let matchingVariable: RegExpExecArray;
-
 	while (matchingFor = forPattern.exec(text)) {
-		while (matchingVariable = variablePattern.exec(text)) {
-			let foundVar = matchingVariable[1];
-			if (foundVar != matchingFor[1]) {
+		const forDeclarationLength = matchingFor[1].length;
+		const forVariable = matchingFor[2];
+		const forContents = matchingFor[3];
+		let matchingVariable: RegExpExecArray;
+		while (matchingVariable = variablePattern.exec(forContents)) {
+			const foundVariable = matchingVariable[1];
+			if (foundVariable != forVariable) {
 				let diagnostic: Diagnostic = {
 					severity: DiagnosticSeverity.Error,
 					range: {
-						start: textDocument.positionAt(matchingVariable.index + 2),
-						end: textDocument.positionAt(matchingVariable.index + foundVar.length + 2)
+						start: textDocument.positionAt(forDeclarationLength + matchingFor.index + matchingVariable.index + 3),
+						end: textDocument.positionAt(forDeclarationLength + matchingFor.index + matchingVariable.index + foundVariable.length + 3)
 					},
-					message: `${foundVar} is undefined`,
+					message: `${foundVariable} is undefined`,
 					source: diagnosticSource
 				};
 				if (hasDiagnosticRelatedInformationCapability) {
@@ -94,35 +95,12 @@ function forLoops(textDocument: TextDocument): Diagnostic[] {
 								uri: textDocument.uri,
 								range: diagnostic.range
 							},
-							message: `For loop variable is ${matchingVariable[1]}, but found ${foundVar}`
+							message: `For loop variable is ${forVariable}, but found ${foundVariable}`
 						}
 					];
 				}
 				result.push(diagnostic);
 			}
-		}
-		if (endForPattern.exec(text) == null) {
-			let diagnostic: Diagnostic = {
-				severity: DiagnosticSeverity.Error,
-				range: {
-					start: textDocument.positionAt(matchingFor.index),
-					end: textDocument.positionAt(matchingFor.index + matchingFor[0].length)
-				},
-				message: "Matching 'endfor' not found",
-				source: diagnosticSource
-			};
-			if (hasDiagnosticRelatedInformationCapability) {
-				diagnostic.relatedInformation = [
-					{
-						location: {
-							uri: textDocument.uri,
-							range: diagnostic.range
-						},
-						message: "'For' keyword has no matching 'endfor' keyword"
-					}
-				];
-			}
-			result.push(diagnostic);
 		}
 	}
 
