@@ -16,7 +16,7 @@ let documents: TextDocuments = new TextDocuments();
 let hasConfigurationCapability: boolean = false;
 let hasWorkspaceFolderCapability: boolean = false;
 let hasDiagnosticRelatedInformationCapability: boolean = false;
-
+const diagnosticSource = "Axibase Visual Plugin";
 
 connection.onInitialize((params: InitializeParams) => {
 	let capabilities = params.capabilities;
@@ -67,21 +67,50 @@ function forLoops(textDocument: TextDocument): Diagnostic[] {
 	let result: Diagnostic[] = [];
 
 	let text = textDocument.getText();
-	let for_pattern = /\bfor\b/g;
-	let endfor_pattern = /\bendfor\b/g;
+	let forPattern = /\bfor\s+(\w+)\s+in\s+(\w+)/g;
+	let variablePattern = /\@\{(\w+)\}/;
+	let endForPattern = /\bendfor\b/g;
 
-	let for_result: RegExpExecArray;
+	let matchingFor: RegExpExecArray;
+	let matchingVariable: RegExpExecArray;
 
-	while (for_result = for_pattern.exec(text)) {
-		if (endfor_pattern.exec(text) == null) {
+	while (matchingFor = forPattern.exec(text)) {
+		let variableName = matchingFor[1];
+		if (matchingVariable = variablePattern.exec(text)) {
+			let foundVar = matchingVariable[1];
+			if (foundVar != variableName) {
+				let diagnostic: Diagnostic = {
+					severity: DiagnosticSeverity.Error,
+					range: {
+						start: textDocument.positionAt(matchingVariable.index + 2),
+						end: textDocument.positionAt(matchingVariable.index + foundVar.length + 2)
+					},
+					message: `${foundVar} is undefined`,
+					source: diagnosticSource
+				};
+				if (hasDiagnosticRelatedInformationCapability) {
+					diagnostic.relatedInformation = [
+						{
+							location: {
+								uri: textDocument.uri,
+								range: diagnostic.range
+							},
+							message: `For loop variable is ${variableName}, but found ${foundVar}`
+						}
+					];
+				}
+				result.push(diagnostic);
+			}
+		}
+		if (endForPattern.exec(text) == null) {
 			let diagnostic: Diagnostic = {
 				severity: DiagnosticSeverity.Error,
 				range: {
-					start: textDocument.positionAt(for_result.index),
-					end: textDocument.positionAt(for_result.index + for_result[0].length)
+					start: textDocument.positionAt(matchingFor.index),
+					end: textDocument.positionAt(matchingFor.index + matchingFor[0].length)
 				},
 				message: "Matching endfor not found",
-				source: "Axibase Visual Plugin"
+				source: diagnosticSource
 			};
 			if (hasDiagnosticRelatedInformationCapability) {
 				diagnostic.relatedInformation = [
