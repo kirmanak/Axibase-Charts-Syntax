@@ -9,14 +9,6 @@ for srv in servers
 // no matching endfor
 ```
 
-* Unknown variable in loop
-
-```
-for srv in servers
-    entity = ${server}
-endfor
-```
-
 * Non-existent series when referred by alias: value('s1')
 
 ```
