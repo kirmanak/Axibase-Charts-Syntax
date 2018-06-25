@@ -61,9 +61,57 @@ function validateTextDocument(textDocument: TextDocument) {
 	undefinedForVariables(textDocument).forEach(element => {
 		diagnostics.push(element);
 	});
+	nonExistentAliases(textDocument).forEach(element => {
+		diagnostics.push(element);
+	});
 
 	// Send the computed diagnostics to VSCode.
 	connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
+}
+
+function nonExistentAliases(textDocument: TextDocument): Diagnostic[] {
+	const result: Diagnostic[] = [];
+
+	const text = textDocument.getText();
+	const aliasRegex = /alias\s*?=\s*?(\w[-\w\d_])/g;
+	const deAliasRegex = /value\((['"])(.*)\1\)/g;
+
+	let matching: RegExpExecArray;
+	let aliases: String[] = [];
+
+	while (matching = aliasRegex.exec(text)) {
+		aliases.push(matching[1]);
+	}
+
+	while(matching = deAliasRegex.exec(text)) {
+		const deAlias = matching[2];
+		if (!aliases.find(alias => alias == deAlias)) {
+			const deAliasStart = matching.index + 'value("'.length;
+			const diagnostic: Diagnostic = {
+				severity: DiagnosticSeverity.Error,
+				range: {
+					start: textDocument.positionAt(deAliasStart),
+					end: textDocument.positionAt(deAliasStart + matching[2].length)
+				},
+				message: "Non-existent alias",
+				source: diagnosticSource
+			};
+			if (hasDiagnosticRelatedInformationCapability) {
+				diagnostic.relatedInformation = [
+					{
+						location: {
+							uri: textDocument.uri,
+							range: diagnostic.range
+						},
+						message: `The alias is referred, but never declared.`
+					}
+				];
+			}
+			result.push(diagnostic);
+		}
+	}
+
+	return result;
 }
 
 function unmatchedEndFor(textDocument: TextDocument): Diagnostic[] {
