@@ -1,9 +1,12 @@
 'use strict';
 
 import {
-	createConnection, TextDocuments, TextDocument, Diagnostic, DiagnosticSeverity,
+	createConnection, TextDocuments, TextDocument, Diagnostic,
 	ProposedFeatures, InitializeParams, DidChangeConfigurationNotification, DocumentFormattingParams, TextEdit
 } from 'vscode-languageserver';
+
+import * as validateFunctions from './validateFunctions';
+import * as formatFunctions from './formatFunctions';
 
 // Create a connection for the server. The connection uses Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
@@ -16,7 +19,6 @@ let documents: TextDocuments = new TextDocuments();
 let hasConfigurationCapability: boolean = false;
 let hasWorkspaceFolderCapability: boolean = false;
 let hasDiagnosticRelatedInformationCapability: boolean = false;
-const diagnosticSource = "Axibase Visual Plugin";
 
 connection.onInitialize((params: InitializeParams) => {
 	let capabilities = params.capabilities;
@@ -55,13 +57,13 @@ documents.onDidChangeContent((change) => {
 
 function validateTextDocument(textDocument: TextDocument) {
 	let diagnostics: Diagnostic[] = [];
-	unmatchedEndFor(textDocument).forEach(element => {
+	validateFunctions.unmatchedEndFor(textDocument, hasDiagnosticRelatedInformationCapability).forEach(element => {
 		diagnostics.push(element);
 	});
-	undefinedForVariables(textDocument).forEach(element => {
+	validateFunctions.undefinedForVariables(textDocument, hasDiagnosticRelatedInformationCapability).forEach(element => {
 		diagnostics.push(element);
 	});
-	nonExistentAliases(textDocument).forEach(element => {
+	validateFunctions.nonExistentAliases(textDocument, hasDiagnosticRelatedInformationCapability).forEach(element => {
 		diagnostics.push(element);
 	});
 
@@ -69,132 +71,6 @@ function validateTextDocument(textDocument: TextDocument) {
 	connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
 }
 
-function nonExistentAliases(textDocument: TextDocument): Diagnostic[] {
-	const result: Diagnostic[] = [];
-
-	const text = textDocument.getText();
-	const aliasRegex = /alias\s*?=\s*?(\w[-\w\d_])/g;
-	const deAliasRegex = /value\((['"])(.*)\1\)/g;
-
-	let matching: RegExpExecArray;
-	let aliases: String[] = [];
-
-	while (matching = aliasRegex.exec(text)) {
-		aliases.push(matching[1]);
-	}
-
-	while (matching = deAliasRegex.exec(text)) {
-		const deAlias = matching[2];
-		if (!aliases.find(alias => alias == deAlias)) {
-			const deAliasStart = matching.index + 'value("'.length;
-			const diagnostic: Diagnostic = {
-				severity: DiagnosticSeverity.Error,
-				range: {
-					start: textDocument.positionAt(deAliasStart),
-					end: textDocument.positionAt(deAliasStart + matching[2].length)
-				},
-				message: "Non-existent alias",
-				source: diagnosticSource
-			};
-			if (hasDiagnosticRelatedInformationCapability) {
-				diagnostic.relatedInformation = [
-					{
-						location: {
-							uri: textDocument.uri,
-							range: diagnostic.range
-						},
-						message: `The alias is referred, but never declared.`
-					}
-				];
-			}
-			result.push(diagnostic);
-		}
-	}
-
-	return result;
-}
-
-function unmatchedEndFor(textDocument: TextDocument): Diagnostic[] {
-	const result: Diagnostic[] = [];
-
-	const text = textDocument.getText();
-	const regexFor = /\bfor\b/g;
-	const regexEndFor = /\bendfor\b/g;
-
-	let matching: RegExpExecArray;
-
-	while (matching = regexFor.exec(text)) {
-		if (!regexEndFor.exec(text)) {
-			const diagnostic: Diagnostic = {
-				severity: DiagnosticSeverity.Error,
-				range: {
-					start: textDocument.positionAt(matching.index),
-					end: textDocument.positionAt(matching.index + 3)
-				},
-				message: "For loop has no matching endfor",
-				source: diagnosticSource
-			};
-			if (hasDiagnosticRelatedInformationCapability) {
-				diagnostic.relatedInformation = [
-					{
-						location: {
-							uri: textDocument.uri,
-							range: diagnostic.range
-						},
-						message: `For keyword expects endfor keyword`
-					}
-				];
-			}
-			result.push(diagnostic);
-		}
-	}
-
-	return result;
-}
-
-function undefinedForVariables(textDocument: TextDocument): Diagnostic[] {
-	const result: Diagnostic[] = [];
-
-	const text = textDocument.getText();
-	const forPattern = /(for\s(\w+?)\sin\s\w+?)\s([\s\S]*?)\sendfor/gm;
-	const variablePattern = /@\{(\w+)\}/g;
-
-	let matchingFor: RegExpExecArray;
-	while (matchingFor = forPattern.exec(text)) {
-		const forDeclarationLength = matchingFor[1].length;
-		const forVariable = matchingFor[2];
-		const forContents = matchingFor[3];
-		let matchingVariable: RegExpExecArray;
-		while (matchingVariable = variablePattern.exec(forContents)) {
-			const foundVariable = matchingVariable[1];
-			if (foundVariable != forVariable) {
-				let diagnostic: Diagnostic = {
-					severity: DiagnosticSeverity.Error,
-					range: {
-						start: textDocument.positionAt(forDeclarationLength + matchingFor.index + matchingVariable.index + 3),
-						end: textDocument.positionAt(forDeclarationLength + matchingFor.index + matchingVariable.index + foundVariable.length + 3)
-					},
-					message: `${foundVariable} is undefined`,
-					source: diagnosticSource
-				};
-				if (hasDiagnosticRelatedInformationCapability) {
-					diagnostic.relatedInformation = [
-						{
-							location: {
-								uri: textDocument.uri,
-								range: diagnostic.range
-							},
-							message: `For loop variable is ${forVariable}, but found ${foundVariable}`
-						}
-					];
-				}
-				result.push(diagnostic);
-			}
-		}
-	}
-
-	return result;
-}
 
 connection.onDidChangeWatchedFiles((_change) => {
 	// Monitored files have change in VSCode
@@ -203,41 +79,12 @@ connection.onDidChangeWatchedFiles((_change) => {
 
 connection.onDocumentFormatting((params: DocumentFormattingParams): TextEdit[] => {
 	let edits: TextEdit[] = [];
-	extraTextSectionLine(params).forEach((edit) => {
+	formatFunctions.extraTextSectionLine(params, documents).forEach((edit) => {
 		edits.push(edit);
 	});
 
 	return edits;
 });
-
-function extraTextSectionLine(params: DocumentFormattingParams): TextEdit[] {
-	let edits: TextEdit[] = [];
-	let document = documents.get(params.textDocument.uri);
-	let text = document.getText();
-	let target = /(.*)\[.*\](.*)/g; // incorrect formatting
-	let purpose = /\[.*\]/; // correct formatting
-	let nonWhiteSpace = /\s*\S+\s*/;
-	let matching: RegExpExecArray;
-
-	while (matching = target.exec(text)) {
-		let incorrectLine = matching[0];
-		let substr = purpose.exec(incorrectLine)[0];
-		let before = matching[1];
-		let after = matching[2];
-		let newText = (nonWhiteSpace.test(before)) ? before + '\n' + substr : substr;
-		if (nonWhiteSpace.test(after)) newText += '\n\t' + after;
-		let edit: TextEdit = {
-			range: {
-				start: document.positionAt(matching.index),
-				end: document.positionAt(matching.index + incorrectLine.length)
-			},
-			newText: newText
-		};
-		edits.push(edit);
-	}
-
-	return edits;
-}
 
 // Make the text document manager listen on the connection
 // for open, change and close text document events

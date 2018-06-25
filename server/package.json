@@ -13,5 +13,13 @@
 	"dependencies": {
 		"vscode-languageserver": "^4.1.3"
 	},
-	"scripts": {}
+	"scripts": {
+		"test": "node node_modules/vscode/bin/test --node-ipc"
+	},
+	"devDependencies": {
+		"typescript": "^2.6.1",
+		"vscode": "^1.1.18",
+		"@types/node": "^7.0.43",
+		"@types/mocha": "^2.2.42"
+	}
 }

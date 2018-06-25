@@ -22,6 +22,19 @@
 			"port": 6009,
 			"sourceMaps": true,
 			"outFiles": ["${workspaceRoot}/server/out/**/*.js"]
+		},
+		{
+			"name": "Extension Tests Server",
+			"type": "extensionHost",
+			"request": "launch",
+			"runtimeExecutable": "${execPath}",
+			"args": [
+				"--extensionDevelopmentPath=${workspaceFolder}/server/",
+				"--extensionTestsPath=${workspaceFolder}/server/out/test"
+			],
+			"outFiles": [
+				"${workspaceFolder}/server/out/test/**/*.js"
+			]
 		}
 	]
 }

@@ -16,28 +16,28 @@
     ],
     "contributes": {
         "configuration": {
-			"type": "object",
-			"title": "Default configuration",
-			"properties": {
-				"languageServer.maxNumberOfProblems": {
-					"scope": "resource",
-					"type": "number",
-					"default": 100,
-					"description": "Controls the maximum number of problems produced by the server."
-				},
-				"languageServer.trace.server": {
-					"scope": "window",
-					"type": "string",
-					"enum": [
-						"off",
-						"messages",
-						"verbose"
-					],
-					"default": "off",
-					"description": "Traces the communication between VSCode and the language server."
-				}
-			}
-		},
+            "type": "object",
+            "title": "Default configuration",
+            "properties": {
+                "languageServer.maxNumberOfProblems": {
+                    "scope": "resource",
+                    "type": "number",
+                    "default": 100,
+                    "description": "Controls the maximum number of problems produced by the server."
+                },
+                "languageServer.trace.server": {
+                    "scope": "window",
+                    "type": "string",
+                    "enum": [
+                        "off",
+                        "messages",
+                        "verbose"
+                    ],
+                    "default": "off",
+                    "description": "Traces the communication between VSCode and the language server."
+                }
+            }
+        },
         "languages": [
             {
                 "id": "atsd-visual",
@@ -70,7 +70,8 @@
         "watch:client": "tsc -w -p ./client/tsconfig.json",
         "watch:server": "tsc -w -p ./server/tsconfig.json",
         "compile": "npm run compile:client && npm run compile:server",
-        "postinstall": "cd client && npm install && cd ../server && npm install && cd .."
+        "postinstall": "cd client && npm install && cd ../server && npm install && cd ..",
+        "test": "cd server && npm test"
     },
     "devDependencies": {
         "@types/mocha": "^5.2.0",
