@@ -83,7 +83,7 @@ function nonExistentAliases(textDocument: TextDocument): Diagnostic[] {
 		aliases.push(matching[1]);
 	}
 
-	while(matching = deAliasRegex.exec(text)) {
+	while (matching = deAliasRegex.exec(text)) {
 		const deAlias = matching[2];
 		if (!aliases.find(alias => alias == deAlias)) {
 			const deAliasStart = matching.index + 'value("'.length;
@@ -123,7 +123,7 @@ function unmatchedEndFor(textDocument: TextDocument): Diagnostic[] {
 
 	let matching: RegExpExecArray;
 
-	while(matching = regexFor.exec(text)) {
+	while (matching = regexFor.exec(text)) {
 		if (!regexEndFor.exec(text)) {
 			const diagnostic: Diagnostic = {
 				severity: DiagnosticSeverity.Error,
