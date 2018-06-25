@@ -55,12 +55,53 @@ documents.onDidChangeContent((change) => {
 
 function validateTextDocument(textDocument: TextDocument) {
 	let diagnostics: Diagnostic[] = [];
+	unmatchedEndFor(textDocument).forEach(element => {
+		diagnostics.push(element);
+	});
 	undefinedForVariables(textDocument).forEach(element => {
 		diagnostics.push(element);
 	});
 
 	// Send the computed diagnostics to VSCode.
 	connection.sendDiagnostics({ uri: textDocument.uri, diagnostics });
+}
+
+function unmatchedEndFor(textDocument: TextDocument): Diagnostic[] {
+	const result: Diagnostic[] = [];
+
+	const text = textDocument.getText();
+	const regexFor = /\bfor\b/g;
+	const regexEndFor = /\bendfor\b/g;
+
+	let matching: RegExpExecArray;
+
+	while(matching = regexFor.exec(text)) {
+		if (!regexEndFor.exec(text)) {
+			const diagnostic: Diagnostic = {
+				severity: DiagnosticSeverity.Error,
+				range: {
+					start: textDocument.positionAt(matching.index),
+					end: textDocument.positionAt(matching.index + 3)
+				},
+				message: "For loop has no matching endfor",
+				source: diagnosticSource
+			};
+			if (hasDiagnosticRelatedInformationCapability) {
+				diagnostic.relatedInformation = [
+					{
+						location: {
+							uri: textDocument.uri,
+							range: diagnostic.range
+						},
+						message: `For keyword expects endfor keyword`
+					}
+				];
+			}
+			result.push(diagnostic);
+		}
+	}
+
+	return result;
 }
 
 function undefinedForVariables(textDocument: TextDocument): Diagnostic[] {
