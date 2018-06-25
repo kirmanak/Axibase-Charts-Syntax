@@ -18,7 +18,7 @@ export function nonExistentAliases(textDocument: TextDocument, hasDiagnosticRela
 
 	while (matching = deAliasRegex.exec(text)) {
 		const deAlias = matching[2];
-		if (!aliases.find(alias => alias == deAlias)) {
+		if (!aliases.find(alias => alias === deAlias)) {
 			const deAliasStart = matching.index + 'value("'.length;
 			const diagnostic: Diagnostic = {
 				severity: DiagnosticSeverity.Error,
