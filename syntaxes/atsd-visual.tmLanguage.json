@@ -11,7 +11,7 @@
 			"patterns": [
 				{
 					"name": "entity.name.class",
-					"match": "(?<![\\d\\w])\\[(configuration|widget|series|tags|group|node|link)\\](?![\\w\\d])"
+					"match": "(?<![\\d\\w])\\[[a-z]++\\](?![\\w\\d])"
 				},
 				{
 					"name": "keyword.control",
