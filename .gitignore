@@ -2,3 +2,5 @@ node_modules
 server/out
 client/out
 *.vsix
+package-lock.json
+
