@@ -11,15 +11,27 @@
 			"patterns": [
 				{
 					"name": "entity.name.class",
-					"match": "\\[(configuration|widget|series|tags|group|node|link)\\]"
+					"match": "(?<![\\d\\w])\\[(configuration|widget|series|tags|group|node|link)\\](?![\\w\\d])"
 				},
 				{
 					"name": "keyword.control",
-					"match": "\\b(for|endfor|in|list)\\b"
+					"match": "(?<![\\d\\w])(for|endfor|in|list|endlist|var|if|elseif|else|endif)(?![\\w\\d])"
+				},
+				{
+					"name": "entity.name.function",
+					"match": "[a-zA-Z][A-Za-z0-9_]+?(?=\\(.*?\\))"
+				},
+				{
+					"name": "support.variable",
+					"match": "(?<![\\d\\w])@\\{.+\\}(?![\\w\\d])"
+				},
+				{
+					"name": "string.quoted",
+					"match": "(?<![\\d\\w])(['\"]).+\\1(?![\\w\\d])"
 				},
 				{
 					"name": "keyword.operator",
-					"match": "\\b(->|=)\\b"
+					"match": "(->|=)"
 				},
 				{
 					"name": "comment.block",
@@ -32,15 +44,11 @@
 				}, 
 				{
 					"name": "variable.name",
-					"match": ".+?(?==)"
-				},
-				{
-					"name": "constant.regexp",
-					"match": "(?<==).++"
+					"match": "(?<![\\d\\w])\\w[-\\w\\d_]+?(?=\\s*=)"
 				},
 				{
 					"name": "constant.numeric",
-					"match": "\\b[0-9]+?\\b"
+					"match": "(?<!\\w)[0-9]+?(?![\\w\\d])"
 				}
 			]
 		}
