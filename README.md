@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/kirmanak/VSCode-ATSD-Extension.svg?branch=master)](https://travis-ci.org/kirmanak/VSCode-ATSD-Extension.svg)
+
 # Axibase Visualization Syntax Highlighting
 
 This is an VSCode extension to support Axibase Visualization language. Performs syntax highlighting, code prettifying and validation.
