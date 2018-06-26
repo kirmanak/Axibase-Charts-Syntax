@@ -59,7 +59,7 @@ suite("Undefined variable in for loop", () => {
         const document: TextDocument = createDoc(text);
         const expected: Diagnostic[] = [createDiagnostic(firstVar, {
             uri: document.uri,
-            range: { start: document.positionAt(37), end: document.positionAt(41) }
+            range: { start: document.positionAt(36), end: document.positionAt(40) }
         })];
         const result = Functions.undefinedForVariables(document, true);
         assert.deepEqual(result, expected);
@@ -76,10 +76,10 @@ suite("Undefined variable in for loop", () => {
         const document: TextDocument = createDoc(text);
         const expected: Diagnostic[] = [createDiagnostic(firstVar, {
             uri: document.uri,
-            range: { start: document.positionAt(37), end: document.positionAt(41) }
+            range: { start: document.positionAt(36), end: document.positionAt(40) }
         }), createDiagnostic(secondVar, {
             uri: document.uri,
-            range: { start: document.positionAt(84), end: document.positionAt(90) }
+            range: { start: document.positionAt(83), end: document.positionAt(89) }
         })];
         const result = Functions.undefinedForVariables(document, true);
         assert.deepEqual(result, expected);
@@ -96,7 +96,7 @@ suite("Undefined variable in for loop", () => {
         const document: TextDocument = createDoc(text);
         const expected: Diagnostic[] = [createDiagnostic(firstVar, {
             uri: document.uri,
-            range: { start: document.positionAt(37), end: document.positionAt(41) }
+            range: { start: document.positionAt(36), end: document.positionAt(40) }
         })];
         const result = Functions.undefinedForVariables(document, true);
         assert.deepEqual(result, expected);
@@ -128,7 +128,7 @@ suite("Undefined variable in for loop", () => {
         const document: TextDocument = createDoc(text);
         const expected: Diagnostic[] = [createDiagnostic(thirdVar, {
             uri: document.uri,
-            range: { start: document.positionAt(86), end: document.positionAt(89) }
+            range: { start: document.positionAt(85), end: document.positionAt(88) }
         })];
         const result = Functions.undefinedForVariables(document, true);
         assert.deepEqual(result, expected);

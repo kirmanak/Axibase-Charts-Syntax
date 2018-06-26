@@ -107,8 +107,8 @@ export function undefinedForVariables(textDocument: TextDocument, hasDiagnosticR
 				let diagnostic: Diagnostic = {
 					severity: DiagnosticSeverity.Error,
 					range: {
-						start: textDocument.positionAt(matching.index + 3),
-						end: textDocument.positionAt(matching.index + 3 + foundVariable.length)
+						start: textDocument.positionAt(matching.index + 2),
+						end: textDocument.positionAt(matching.index + 2 + foundVariable.length)
 					},
 					message: `${foundVariable} is undefined`,
 					source: diagnosticSource
