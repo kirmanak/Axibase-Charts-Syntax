@@ -1,9 +1,10 @@
 import { DocumentFormattingParams, TextDocuments, TextEdit } from 'vscode-languageserver';
+import * as Shared from './sharedFunctions';
 
 export function extraTextSectionLine(params: DocumentFormattingParams, documents: TextDocuments): TextEdit[] {
 	let edits: TextEdit[] = [];
 	let document = documents.get(params.textDocument.uri);
-	let text = document.getText();
+	let text = Shared.deleteComments(document.getText());
 	let target = /(.*)\[.*\](.*)/g; // incorrect formatting
 	let purpose = /\[.*\]/; // correct formatting
 	let nonWhiteSpace = /\s*\S+\s*/;

@@ -38,6 +38,16 @@ suite("Undefined variable in for loop", () => {
         assert.deepEqual(result, []);
     });
 
+    test("One correct loop with comment", () => {
+        const text =
+            `for ${firstVar} /* this is a comment */ in servers\n` +
+            `   entity = @{${firstVar}}\n` +
+            "endfor";
+        const document: TextDocument = createDoc(text);
+        const result = Functions.undefinedForVariables(document, true);
+        assert.deepEqual(result, []);
+    });
+
     test("Two correct  loops", () => {
         const text =
             `for ${firstVar} in servers\n` +

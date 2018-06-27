@@ -1,11 +1,12 @@
 import { Diagnostic, DiagnosticSeverity, TextDocument } from "vscode-languageserver/lib/main";
+import * as Shared from './sharedFunctions';
 
 const diagnosticSource = "Axibase Visual Plugin";
 
 export function nonExistentAliases(textDocument: TextDocument, hasDiagnosticRelatedInformationCapability: boolean): Diagnostic[] {
 	const result: Diagnostic[] = [];
 
-	const text = textDocument.getText();
+	const text = Shared.deleteComments(textDocument.getText());
 	const aliasRegex = /alias\s*?=\s*?(\w[-\w\d_])/g;
 	const deAliasRegex = /value\((['"])(.*)\1\)/g;
 
@@ -50,7 +51,7 @@ export function nonExistentAliases(textDocument: TextDocument, hasDiagnosticRela
 export function unmatchedEndFor(textDocument: TextDocument, hasDiagnosticRelatedInformationCapability: boolean): Diagnostic[] {
 	const result: Diagnostic[] = [];
 
-	const text = textDocument.getText();
+	const text = Shared.deleteComments(textDocument.getText());
 	const regexFor = /\bfor\b/g;
 	const regexEndFor = /\bendfor\b/g;
 
@@ -88,9 +89,9 @@ export function unmatchedEndFor(textDocument: TextDocument, hasDiagnosticRelated
 export function undefinedForVariables(textDocument: TextDocument, hasDiagnosticRelatedInformationCapability: boolean): Diagnostic[] {
 	const result: Diagnostic[] = [];
 
-	const text = textDocument.getText();
-	const forPattern = /\bfor\s+?[-_\w\d]+?\s+?in\b|\bendfor\b|@\{[-_\w\d]+?\}/g;
-	const forDeclaration = /\bfor\s+?([-_\w\d]+?)\s+?in\b/;
+	const text = Shared.deleteComments(textDocument.getText());
+	const forPattern = /\bfor[ \t]+?[-_\w\d]+?[ \t]+?in\b|\bendfor\b|@\{[-_\w\d]+?\}/g;
+	const forDeclaration = /\bfor[ \t]+?([-_\w\d]+?)[ \t]+?in\b/;
 	const variablePattern = /@\{([-_\w\d]+?)\}/;
 	const endForRegex = /\bendfor\b/;
 
