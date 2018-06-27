@@ -1,11 +1,10 @@
-import { DocumentFormattingParams, TextDocuments, TextEdit } from 'vscode-languageserver';
 import * as Shared from './sharedFunctions';
+import { TextEdit, TextDocument } from 'vscode-languageserver';
 
-export function extraTextSectionLine(params: DocumentFormattingParams, documents: TextDocuments): TextEdit[] {
+export function extraTextSectionLine(document: TextDocument): TextEdit[] {
 	let edits: TextEdit[] = [];
-	let document = documents.get(params.textDocument.uri);
 	let text = Shared.deleteComments(document.getText());
-	let target = /(.*)\[.*\](.*)/g; // incorrect formatting
+	let target = /(?:(.*?[^ \t\n].*?)\[.*?\](.*))|(?:(.*?)\[.*\](.*?[^ \t\n].*))/g; // incorrect formatting
 	let purpose = /\[.*\]/; // correct formatting
 	let nonWhiteSpace = /\s*\S+\s*/;
 	let matching: RegExpExecArray;
@@ -13,9 +12,9 @@ export function extraTextSectionLine(params: DocumentFormattingParams, documents
 	while (matching = target.exec(text)) {
 		let incorrectLine = matching[0];
 		let substr = purpose.exec(incorrectLine)[0];
-		let before = matching[1];
-		let after = matching[2];
-		let newText = (nonWhiteSpace.test(before)) ? before + '\n' + substr : substr;
+		let before = (matching[1] === undefined) ? matching[3] : matching[1];
+		let after = (matching[2] === undefined) ? matching[4] : matching[2];
+		let newText = (nonWhiteSpace.test(before)) ? before + '\n\n' + substr : substr;
 		if (nonWhiteSpace.test(after)) newText += '\n\t' + after;
 		let edit: TextEdit = {
 			range: {

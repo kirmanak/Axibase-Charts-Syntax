@@ -78,8 +78,9 @@ connection.onDidChangeWatchedFiles((_change) => {
 });
 
 connection.onDocumentFormatting((params: DocumentFormattingParams): TextEdit[] => {
-	let edits: TextEdit[] = [];
-	formatFunctions.extraTextSectionLine(params, documents).forEach((edit) => {
+	const edits: TextEdit[] = [];
+	const document = documents.get(params.textDocument.uri);
+	formatFunctions.extraTextSectionLine(document).forEach((edit) => {
 		edits.push(edit);
 	});
 
