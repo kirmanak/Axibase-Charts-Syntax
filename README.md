@@ -1,39 +1,24 @@
-[![Build Status](https://travis-ci.org/kirmanak/VSCode-ATSD-Extension.svg?branch=master)](https://travis-ci.org/kirmanak/VSCode-ATSD-Extension.svg)
-
 # Axibase Visualization Syntax Highlighting
 
-This is an VSCode extension to support Axibase Visualization language. Performs syntax highlighting, code prettifying and validation.
+[![Build Status](https://travis-ci.org/kirmanak/VSCode-ATSD-Extension.svg?branch=master)](https://travis-ci.org/kirmanak/VSCode-ATSD-Extension.svg)
+
+This is an VSCode extension to support Axibase Visualization language. Performs syntax highlighting and validation.
 
 ## Installation
 
-* cd to VSCode extensions directory
+* clone the repository and cd there
 
 ```bash
-cd ~/.vscode/extensions/
+git clone https://github.com/kirmanak/VSCode-ATSD-Extension.git ~/.vscode/extensions/atsd-visual
+cd ~/.vscode/extensions/atsd-visual
 ```
 
-* clone the repository
+* install node modules and compile the extension
 
 ```bash
-git clone https://github.com/kirmanak/VSCode-ATSD-Extension.git atsd-visual
+npm install && npm run compile
 ```
 
-* cd to atsd-visual
+* that's it, the plugin handles files with .av extension.
 
-```bash
-cd atsd-visual
-```
-
-* install node modules
-
-```bash
-npm install
-```
-
-* compile the extension
-
-```bash
-npm run compile
-```
-
-* that's it, the plugin handles files with .av extension. Examples are available in ``~/.vscode/extensions/atsd-visual/examples/``.
+    Examples are available in ``~/.vscode/extensions/atsd-visual/examples/``.
