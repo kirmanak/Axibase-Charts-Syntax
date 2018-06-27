@@ -27,7 +27,7 @@ suite("Unmatched endfor tests", () => {
     test("One correct loop", () => {
         const text =
             "for server in servers\n" +
-            "   #do something\n" +
+            "   do something\n" +
             "endfor";
         const document: TextDocument = createDoc(text);
         const expected: Diagnostic[] = [];
@@ -38,10 +38,10 @@ suite("Unmatched endfor tests", () => {
     test("Two correct loops", () => {
         const text =
             "for server in servers\n" +
-            "   #do something\n" +
+            "   do something\n" +
             "endfor\n" +
             "for server in servers\n" +
-            "   #do something\n" +
+            "   do something\n" +
             "endfor";
         const document: TextDocument = createDoc(text);
         const expected: Diagnostic[] = [];
@@ -52,8 +52,7 @@ suite("Unmatched endfor tests", () => {
     test("One incorrect loop", () => {
         const text =
             "for server in servers\n" +
-            "   #do something\n";
-
+            "   do something\n";
         const document: TextDocument = createDoc(text);
         const expected: Diagnostic[] = [createDiagnostic({
             uri: document.uri, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 3 } }
@@ -65,9 +64,9 @@ suite("Unmatched endfor tests", () => {
     test("Two incorrect loops", () => {
         const text =
             "for server in servers\n" +
-            "   #do something\n" +
+            "   do something\n" +
             "for server in servers\n" +
-            "   #do something\n";
+            "   do something\n";
         const document: TextDocument = createDoc(text);
         const expected: Diagnostic[] = [createDiagnostic({
             uri: document.uri, range: { start: { line: 0, character: 0 }, end: { line: 0, character: 3 } }
@@ -82,13 +81,13 @@ suite("Unmatched endfor tests", () => {
     test("One incorrect loop, one correct loop", () => {
         const text =
             "for server in servers\n" +
-            "   #do something\n" +
+            "   do something\n" +
             "for server in servers\n" +
-            "   #do something\n" +
+            "   do something\n" +
             "endfor";
         const document: TextDocument = createDoc(text);
         const expected: Diagnostic[] = [createDiagnostic({
-            uri: document.uri, range: { start: { line: 2, character: 0}, end: { line: 2, character: 3} }
+            uri: document.uri, range: { start: { line: 2, character: 0 }, end: { line: 2, character: 3 } }
         })];
         const result = Functions.unmatchedEndFor(document, true);
         assert.deepEqual(result, expected);
