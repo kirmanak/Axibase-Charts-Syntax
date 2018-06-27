@@ -90,8 +90,8 @@ export function undefinedForVariables(textDocument: TextDocument, hasDiagnosticR
 	const result: Diagnostic[] = [];
 
 	const text = Shared.deleteComments(textDocument.getText());
-	const forPattern = /\bfor[ \t]+?[-_\w\d]+?[ \t]+?in\b|\bendfor\b|@\{[-_\w\d]+?\}/g;
-	const forDeclaration = /\bfor[ \t]+?([-_\w\d]+?)[ \t]+?in\b/;
+	const forPattern = /\bfor\s+?[-_\w\d]+?\s+?in\b|\bendfor\b|@\{[-_\w\d]+?\}/g;
+	const forDeclaration = /\bfor\s+?([-_\w\d]+?)\s+?in\b/;
 	const variablePattern = /@\{([-_\w\d]+?)\}/;
 	const endForRegex = /\bendfor\b/;
 

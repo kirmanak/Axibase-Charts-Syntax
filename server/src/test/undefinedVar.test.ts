@@ -34,8 +34,9 @@ suite("Undefined variable in for loop", () => {
             `   entity = @{${firstVar}}\n` +
             "endfor";
         const document: TextDocument = createDoc(text);
+        const expected: Diagnostic[] = [];
         const result = Functions.undefinedForVariables(document, true);
-        assert.deepEqual(result, []);
+        assert.deepEqual(result, expected);
     });
 
     test("One correct loop with comment", () => {
@@ -44,8 +45,9 @@ suite("Undefined variable in for loop", () => {
             `   entity = @{${firstVar}}\n` +
             "endfor";
         const document: TextDocument = createDoc(text);
+        const expected: Diagnostic[] = [];
         const result = Functions.undefinedForVariables(document, true);
-        assert.deepEqual(result, []);
+        assert.deepEqual(result, expected);
     });
 
     test("Two correct  loops", () => {
