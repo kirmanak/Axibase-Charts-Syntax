@@ -2,11 +2,10 @@
 
 import {
 	createConnection, TextDocuments, TextDocument, Diagnostic,
-	ProposedFeatures, InitializeParams, DidChangeConfigurationNotification, DocumentFormattingParams, TextEdit
+	ProposedFeatures, InitializeParams, DidChangeConfigurationNotification
 } from 'vscode-languageserver';
 
 import * as validateFunctions from './validateFunctions';
-import * as formatFunctions from './formatFunctions';
 
 // Create a connection for the server. The connection uses Node's IPC as a transport.
 // Also include all preview / proposed LSP features.
@@ -31,8 +30,7 @@ connection.onInitialize((params: InitializeParams) => {
 
 	return {
 		capabilities: {
-			textDocumentSync: documents.syncKind,
-			documentFormattingProvider: true
+			textDocumentSync: documents.syncKind
 		}
 	}
 });
@@ -75,16 +73,6 @@ function validateTextDocument(textDocument: TextDocument) {
 connection.onDidChangeWatchedFiles((_change) => {
 	// Monitored files have change in VSCode
 	connection.console.log('We received an file change event');
-});
-
-connection.onDocumentFormatting((params: DocumentFormattingParams): TextEdit[] => {
-	const edits: TextEdit[] = [];
-	const document = documents.get(params.textDocument.uri);
-	formatFunctions.extraTextSectionLine(document).forEach((edit) => {
-		edits.push(edit);
-	});
-
-	return edits;
 });
 
 // Make the text document manager listen on the connection
