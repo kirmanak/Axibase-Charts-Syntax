@@ -11,7 +11,7 @@
 			"patterns": [
 				{
 					"name": "entity.name.class",
-					"match": "(?<![\\d\\w])\\[[a-z]++\\](?![\\w\\d])"
+					"match": "(?<![\\d\\w])\\[[a-z]+\\](?![\\w\\d])"
 				},
 				{
 					"name": "keyword.control",
@@ -40,7 +40,7 @@
 				},
 				{
 					"name": "comment.line.number-sign",
-					"match": "#.++"
+					"match": "#.*"
 				}, 
 				{
 					"name": "variable.name",
