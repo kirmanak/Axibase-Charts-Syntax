@@ -4,4 +4,4 @@ server/.vscode-test
 client/out
 *.vsix
 package-lock.json
-
+*.swp
