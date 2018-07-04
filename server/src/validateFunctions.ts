@@ -119,7 +119,7 @@ export function undefinedForVariables(textDocument: TextDocument, hasDiagnosticR
 				};
 				if (hasDiagnosticRelatedInformationCapability) {
 					diagnostic.relatedInformation = [{
-						location: {uri: textDocument.uri, range: diagnostic.range },
+						location: { uri: textDocument.uri, range: diagnostic.range },
 						message: `${foundVariable} is used in loop, but wasn't declared`
 					}];
 				}
@@ -143,13 +143,13 @@ export function validateUnfinishedList(textDocument: TextDocument, hasDiagnostic
 
 	let matching: RegExpExecArray;
 
-	while (matching = listDeclaration.exec(text)) { 
+	while (matching = listDeclaration.exec(text)) {
 		if (!endList.exec(text)) {
 			const diagnostic: Diagnostic = {
 				severity: DiagnosticSeverity.Error,
-				range: { 
-					start: textDocument.positionAt(matching.index), 
-					end: textDocument.positionAt(matching.index + matching[0].length) 
+				range: {
+					start: textDocument.positionAt(matching.index),
+					end: textDocument.positionAt(matching.index + matching[0].length)
 				},
 				message: "list is not closed",
 				source: diagnosticSource
@@ -170,7 +170,7 @@ export function validateUnfinishedList(textDocument: TextDocument, hasDiagnostic
 const dictionary: string[] = [
 	"widget", "series", "configuration",
 	"node", "start-time", "link", "tags", "group",
-	"id", "label", "alias", "value", "type", 
+	"id", "label", "alias", "value", "type",
 	"tooltip", "left-units", "top-units", "time-span",
 	"ahead-time-span", "colors", "legend-position",
 	"scale", "scale-x", "scale-y", "min-range", "max-range",
@@ -181,9 +181,9 @@ const dictionary: string[] = [
 	"markers", "format", "label-format", "day-format", "cache", "limit",
 	"audio-onload", "display-panels", "expand-panels", "metric", "table",
 	"attribute", "entity", "entities", "entity-group", "entity-expression",
-	"tag-expression", "statistic", "period", "align", "interpolate", 
-	"interpolate-extend", "rate", "rate-counter", "replace-value", 
-	"data-type", "forecast-name", "style", "alias", "alert-expression", 
+	"tag-expression", "statistic", "period", "align", "interpolate",
+	"interpolate-extend", "rate", "rate-counter", "replace-value",
+	"data-type", "forecast-name", "style", "alias", "alert-expression",
 	"alert-style", "audio-alert", "group-keys", "group-statistic", "group-period",
 	"group-first", "group-interpolate", "group-interpolate-extend", "series-limit",
 	"exact-match", "merge-fields", "color", "axis", "format", "display", "enabled",
@@ -220,7 +220,7 @@ export function spellingCheck(textDocument: TextDocument, hasDiagnosticRelatedIn
 	const result: Diagnostic[] = [];
 
 	const text = Shared.deleteComments(textDocument.getText());
-	const bothRegex = /\[\s*(\w+)\s*\]|(\S+)\s*=/g;
+	const bothRegex = /(^\s*)\[(\w+)\]|(^\s*)(\S+)\s*=/gm;
 	const sectionRegex = /\[\s*(\w+)\s*\]/g;
 	let match: RegExpExecArray;
 	let isTags = false;
@@ -232,14 +232,16 @@ export function spellingCheck(textDocument: TextDocument, hasDiagnosticRelatedIn
 			isTags = false;
 		}
 
-		const word = (match[1]) ? match[1] : match[2];
+		const word = (match[2]) ? match[2] : match[4];
+		const indent = (match[1]) ? match[1] : match[3];
+		const wordStart = (indent) ? match.index + indent.length : match.index;
 		if (isAbsent(word) && !isTags) {
 			const suggestion: string = lowestLevenshtein(word);
 			let diagnostic: Diagnostic = {
 				severity: DiagnosticSeverity.Warning,
 				range: {
-					start: textDocument.positionAt(match.index),
-					end: textDocument.positionAt(match.index + word.length)
+					start: textDocument.positionAt(wordStart),
+					end: textDocument.positionAt(wordStart + word.length)
 				},
 				message: `${word} is unknown`,
 				source: diagnosticSource
