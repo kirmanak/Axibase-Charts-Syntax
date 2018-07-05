@@ -1,10 +1,8 @@
-import { Diagnostic, DiagnosticSeverity, TextDocument } from "vscode-languageserver/lib/main";
+import { Location, Diagnostic, DiagnosticSeverity, TextDocument } from "vscode-languageserver/lib/main";
 import * as Shared from './sharedFunctions';
 import * as Levenshtein from 'levenshtein';
 
-const diagnosticSource = "Axibase Visual Plugin";
-
-export function nonExistentAliases(textDocument: TextDocument, hasDiagnosticRelatedInformationCapability: boolean): Diagnostic[] {
+export function nonExistentAliases(textDocument: TextDocument, isRelatedInfoSupported: boolean): Diagnostic[] {
 	const result: Diagnostic[] = [];
 
 	const text = Shared.deleteComments(textDocument.getText());
@@ -21,26 +19,17 @@ export function nonExistentAliases(textDocument: TextDocument, hasDiagnosticRela
 			const deAlias = matching[3];
 			if (!aliases.find(alias => alias === deAlias)) {
 				const deAliasStart = matching.index + 'value("'.length;
-				const diagnostic: Diagnostic = {
-					severity: DiagnosticSeverity.Error,
+				const location: Location = { 
+					uri: textDocument.uri, 
 					range: {
 						start: textDocument.positionAt(deAliasStart),
 						end: textDocument.positionAt(deAliasStart + matching[3].length)
-					},
-					message: "Non-existent alias",
-					source: diagnosticSource
+					}
 				};
-				if (hasDiagnosticRelatedInformationCapability) {
-					diagnostic.relatedInformation = [
-						{
-							location: {
-								uri: textDocument.uri,
-								range: diagnostic.range
-							},
-							message: `The alias is referred, but never declared.`
-						}
-					];
-				}
+				const diagnostic: Diagnostic = Shared.createDiagnostic(
+					location, DiagnosticSeverity.Error, 
+					`The alias ${deAlias} is reffered, but never declared`, isRelatedInfoSupported
+				);
 				result.push(diagnostic);
 			}
 		} else if (aliasRegex.test(line)) {
@@ -51,7 +40,7 @@ export function nonExistentAliases(textDocument: TextDocument, hasDiagnosticRela
 	return result;
 }
 
-export function unmatchedEndFor(textDocument: TextDocument, hasDiagnosticRelatedInformationCapability: boolean): Diagnostic[] {
+export function unmatchedEndFor(textDocument: TextDocument, isRelatedInfoSupported: boolean): Diagnostic[] {
 	const result: Diagnostic[] = [];
 
 	const text = Shared.deleteComments(textDocument.getText());
@@ -62,26 +51,17 @@ export function unmatchedEndFor(textDocument: TextDocument, hasDiagnosticRelated
 
 	while (matching = regexFor.exec(text)) {
 		if (!regexEndFor.exec(text)) {
-			const diagnostic: Diagnostic = {
-				severity: DiagnosticSeverity.Error,
+			const location: Location = { 
+				uri: textDocument.uri, 
 				range: {
 					start: textDocument.positionAt(matching.index),
 					end: textDocument.positionAt(matching.index + 3)
-				},
-				message: "For loop has no matching endfor",
-				source: diagnosticSource
+				}
 			};
-			if (hasDiagnosticRelatedInformationCapability) {
-				diagnostic.relatedInformation = [
-					{
-						location: {
-							uri: textDocument.uri,
-							range: diagnostic.range
-						},
-						message: `For keyword expects endfor keyword`
-					}
-				];
-			}
+			const diagnostic: Diagnostic = Shared.createDiagnostic(
+				location, DiagnosticSeverity.Error, 
+				"For loop has no matching endfor", isRelatedInfoSupported
+			);
 			result.push(diagnostic);
 		}
 	}
@@ -89,7 +69,7 @@ export function unmatchedEndFor(textDocument: TextDocument, hasDiagnosticRelated
 	return result;
 }
 
-export function undefinedForVariables(textDocument: TextDocument, hasDiagnosticRelatedInformationCapability: boolean): Diagnostic[] {
+export function undefinedForVariables(textDocument: TextDocument, isRelatedInfoSupported: boolean): Diagnostic[] {
 	const result: Diagnostic[] = [];
 
 	const text = Shared.deleteComments(textDocument.getText());
@@ -108,21 +88,17 @@ export function undefinedForVariables(textDocument: TextDocument, hasDiagnosticR
 			if (possibleVariables.find((value: string, _index: number, _array: string[]): boolean => {
 				return foundVariable === value;
 			}) === undefined) {
-				const diagnostic: Diagnostic = {
-					severity: DiagnosticSeverity.Error,
+				const location: Location = { 
+					uri: textDocument.uri, 
 					range: {
 						start: textDocument.positionAt(matching.index + 2),
 						end: textDocument.positionAt(matching.index + 2 + foundVariable.length)
-					},
-					message: `${foundVariable} is undefined`,
-					source: diagnosticSource
+					}
 				};
-				if (hasDiagnosticRelatedInformationCapability) {
-					diagnostic.relatedInformation = [{
-						location: { uri: textDocument.uri, range: diagnostic.range },
-						message: `${foundVariable} is used in loop, but wasn't declared`
-					}];
-				}
+				const diagnostic: Diagnostic = Shared.createDiagnostic(
+					location, DiagnosticSeverity.Error, 
+					`${foundVariable} is used in loop, but wasn't declared`, isRelatedInfoSupported
+				);
 				result.push(diagnostic);
 			}
 		} else if (forDeclaration.test(matching[0])) {
@@ -134,7 +110,7 @@ export function undefinedForVariables(textDocument: TextDocument, hasDiagnosticR
 	return result;
 }
 
-export function validateUnfinishedList(textDocument: TextDocument, hasDiagnosticRelatedInformationCapability: boolean): Diagnostic[] {
+export function validateUnfinishedList(textDocument: TextDocument, isRelatedInfoSupported: boolean): Diagnostic[] {
 	const result: Diagnostic[] = [];
 
 	const text = Shared.deleteComments(textDocument.getText());
@@ -145,21 +121,17 @@ export function validateUnfinishedList(textDocument: TextDocument, hasDiagnostic
 
 	while (matching = listDeclaration.exec(text)) {
 		if (!endList.exec(text)) {
-			const diagnostic: Diagnostic = {
-				severity: DiagnosticSeverity.Error,
+			const location: Location = { 
+				uri: textDocument.uri, 
 				range: {
 					start: textDocument.positionAt(matching.index),
 					end: textDocument.positionAt(matching.index + matching[0].length)
-				},
-				message: "list is not closed",
-				source: diagnosticSource
+				}
 			};
-			if (hasDiagnosticRelatedInformationCapability) {
-				diagnostic.relatedInformation = [{
-					location: { uri: textDocument.uri, range: diagnostic.range },
-					message: 'Delete comma or add endlist keyword'
-				}];
-			}
+			const diagnostic: Diagnostic = Shared.createDiagnostic(
+				location, DiagnosticSeverity.Error, 
+				"list is not closed. Use 'endlist' keyword", isRelatedInfoSupported
+			);
 			result.push(diagnostic);
 		}
 	}
@@ -216,7 +188,7 @@ function lowestLevenshtein(word: string): string {
 	return suggestion;
 }
 
-export function spellingCheck(textDocument: TextDocument, hasDiagnosticRelatedInformationCapability: boolean): Diagnostic[] {
+export function spellingCheck(textDocument: TextDocument, isRelatedInfoSupported: boolean): Diagnostic[] {
 	const result: Diagnostic[] = [];
 
 	const text = Shared.deleteComments(textDocument.getText());
@@ -237,26 +209,17 @@ export function spellingCheck(textDocument: TextDocument, hasDiagnosticRelatedIn
 		const wordStart = (indent) ? match.index + indent.length : match.index;
 		if (isAbsent(word) && !isTags) {
 			const suggestion: string = lowestLevenshtein(word);
-			let diagnostic: Diagnostic = {
-				severity: DiagnosticSeverity.Warning,
+			const location: Location = { 
+				uri: textDocument.uri, 
 				range: {
 					start: textDocument.positionAt(wordStart),
 					end: textDocument.positionAt(wordStart + word.length)
-				},
-				message: `${word} is unknown`,
-				source: diagnosticSource
+				}
 			};
-			if (hasDiagnosticRelatedInformationCapability) {
-				diagnostic.relatedInformation = [
-					{
-						location: {
-							uri: textDocument.uri,
-							range: diagnostic.range
-						},
-						message: `${word} is unknown. Did you mean ${suggestion}?`
-					}
-				];
-			}
+			const diagnostic: Diagnostic = Shared.createDiagnostic(
+				location, DiagnosticSeverity.Error, 
+				`${word} is unknown. Did you mean ${suggestion}?`, isRelatedInfoSupported
+			);
 			result.push(diagnostic);
 		}
 	}

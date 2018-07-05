@@ -1,3 +1,18 @@
+import { Location, Diagnostic, DiagnosticSeverity } from 'vscode-languageserver';
+
+const diagnosticSource = "Axibase Visual Plugin";
+
+export function createDiagnostic(location: Location, severity: DiagnosticSeverity, message: string, isRelatedInfoSupported: boolean): Diagnostic {
+	const diagnostic: Diagnostic = {
+		severity: severity, range: location.range, 
+		message: message, source: diagnosticSource,
+	};
+	if (isRelatedInfoSupported) {
+		diagnostic.relatedInformation = [{ location: location, message: message }];
+	}
+	return diagnostic;
+}
+
 export function deleteComments(text: string): string {
 	const multiLine = /\/\*[\s\S]*?\*\//gm;
 	const oneLine = /#.*/g;
