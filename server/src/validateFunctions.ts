@@ -1,4 +1,4 @@
-import { Location, Diagnostic, DiagnosticSeverity, TextDocument } from "vscode-languageserver/lib/main";
+import { Location, Range, Diagnostic, DiagnosticSeverity, TextDocument } from 'vscode-languageserver';
 import * as Shared from './sharedFunctions';
 import * as Levenshtein from 'levenshtein';
 
@@ -222,6 +222,53 @@ export function spellingCheck(textDocument: TextDocument, isRelatedInfoSupported
 			);
 			result.push(diagnostic);
 		}
+	}
+
+	return result;
+}
+
+export function ifValidation(textDocument: TextDocument, isRelatedInfoSupported: boolean): Diagnostic[] {
+	const result: Diagnostic[] = [];
+
+	const text = Shared.deleteComments(textDocument.getText());
+	const regex = /\bif\b|\belseif\b|\belse\b|\bendif\b/g;
+	let match: RegExpExecArray;
+	let openedIfCounter = 0;
+	let lastIf: Range;
+
+	while (match = regex.exec(text)) {
+		if (/\bif\b/.test(match[0])) {
+			openedIfCounter++;
+			lastIf = {
+				start: textDocument.positionAt(match.index),
+				end: textDocument.positionAt(match.index + match[0].length)
+			};
+		} else {
+			if (openedIfCounter < 1) {
+				const location: Location = { 
+					uri: textDocument.uri, 
+					range: {
+						start: textDocument.positionAt(match.index),
+						end: textDocument.positionAt(match.index + match[0].length)
+					}
+				};
+				const diagnostic: Diagnostic = Shared.createDiagnostic(
+					location, DiagnosticSeverity.Error, 
+					`"${match[0]}" has no matching "if"`, isRelatedInfoSupported
+				);
+				result.push(diagnostic);
+			} else if (/\bendif\b/.test(match[0])) {
+				openedIfCounter--;
+			}
+		}
+	}
+	if (openedIfCounter !== 0) { 
+		const location: Location = { uri: textDocument.uri, range: lastIf };
+		const diagnostic: Diagnostic = Shared.createDiagnostic(
+			location, DiagnosticSeverity.Error, 
+			`"if" has no matching "endif"`, isRelatedInfoSupported
+		);
+		result.push(diagnostic);
 	}
 
 	return result;
