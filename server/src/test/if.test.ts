@@ -7,7 +7,7 @@ function createDoc(text: string): TextDocument {
 	return TextDocument.create("testDoc", "atsd-visual", 0, text);
 }
 
-suite("Unmatched endfor tests", () => {
+suite("If elseif else endif validation tests", () => {
 
 	test("One correct if-elseif-endif", () => {
 		const text =
