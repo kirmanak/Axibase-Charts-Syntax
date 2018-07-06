@@ -2,7 +2,7 @@
 
 [![Build Status](https://travis-ci.org/kirmanak/VSCode-ATSD-Extension.svg?branch=master)](https://travis-ci.org/kirmanak/VSCode-ATSD-Extension.svg)
 
-VSCode extension supporting [Axibase Charts](https://github.com/axibase/charts/blob/master/README.md) syntax. the plugin performs syntax highlighting and validation.
+VSCode extension supporting [Axibase Charts](https://github.com/axibase/charts/blob/master/README.md) syntax. The plugin performs syntax highlighting and validation.
 
 ## Installation
 
