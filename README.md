@@ -10,10 +10,13 @@ VSCode extension supporting [Axibase Charts](https://github.com/axibase/charts/b
 
 ```bash
 git clone https://github.com/kirmanak/VSCode-ATSD-Extension.git ~/.vscode/extensions/atsd-visual
-cd ~/.vscode/extensions/atsd-visual
 ```
 
 * `cd` into the newly created directory.
+
+```bash
+cd ~/.vscode/extensions/atsd-visual
+```
 
 * Install node modules and compile the extension.
 
