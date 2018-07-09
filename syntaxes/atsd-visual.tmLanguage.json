@@ -15,7 +15,7 @@
 				},
 				{
 					"name": "keyword.control",
-					"match": "\\b(script|endscript|for|endfor|in|list|endlist|var|if|elseif|else|endif)\\b"
+					"match": "\\b(csv|endcsv|endvar|script|endscript|for|endfor|in|list|endlist|var|if|elseif|else|endif)\\b"
 				},
 				{
 					"name": "entity.name.function",
@@ -45,6 +45,10 @@
 				{
 					"name": "variable.name",
 					"match": "\\b\\w[-\\w\\d_]+?(?=\\s*=)"
+				},
+				{
+					"name":"constant.regexp",
+					"match": "\\b([0-9]+|true|false)\\b"
 				},
 				{
 					"name": "constant.numeric",
