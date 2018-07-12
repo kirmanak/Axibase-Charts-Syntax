@@ -1,6 +1,6 @@
 # Axibase Charts Syntax
 
-[![Build Status](https://travis-ci.org/kirmanak/axibase-charts-syntax.svg?branch=master)](https://travis-ci.org/kirmanak/axibase-charts-syntax.svg)
+[![Build Status](https://travis-ci.org/kirmanak/Axibase-Charts-Syntax.svg?branch=master)](https://travis-ci.org/kirmanak/Axibase-Charts-Syntax)
 
 VSCode extension supporting [Axibase Charts](https://github.com/axibase/charts/blob/master/README.md) syntax. The plugin performs syntax highlighting and validation.
 
