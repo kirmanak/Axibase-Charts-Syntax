@@ -1,19 +1,20 @@
-import { Location, Range, Diagnostic, DiagnosticSeverity, TextDocument } from 'vscode-languageserver';
-import * as Shared from './sharedFunctions';
-import * as Levenshtein from 'levenshtein';
+import * as Levenshtein from "levenshtein";
+import { Diagnostic, DiagnosticSeverity, Location, Range, TextDocument } from "vscode-languageserver";
+import * as Shared from "./sharedFunctions";
 
-function suggestionMessage(word: string, dictionary: string[]): string | null {
-    if (dictionary.length === 0) return Shared.errorMessage(word, null);
-    let min: number = new Levenshtein(dictionary[0], word).distance;
-    let suggestion = dictionary[0];
-    for (let i = 1, len = dictionary.length; i < len; i++) {
-        const value = dictionary[i];
-        const distance = new Levenshtein(value, word).distance;
-        if (distance < min) {
-            min = distance;
-            suggestion = value;
-        }
-    }
+function suggestionMessage(word: string, dictionaries: Map<string, string[]>): string {
+    let suggestion = null;
+    let min = Number.MAX_VALUE;
+    dictionaries.forEach((dictionary) => {
+        dictionary.forEach((value) => {
+            if (value === undefined) { return; }
+            const distance = new Levenshtein(value, word).distance;
+            if (distance < min) {
+                min = distance;
+                suggestion = value;
+            }
+        });
+    });
     return Shared.errorMessage(word, suggestion);
 }
 
@@ -21,24 +22,26 @@ function spellingCheck(line: string, uri: string, i: number): Diagnostic | null 
     let match: RegExpExecArray;
 
     /* statements like `[section] variable = value` aren't supported */
-    if ((match = /^([ \t]*\[)(\w+)\]/gm.exec(line)) || (match = /^(['" \t]*)([-\w]+)['" \t]*=/gm.exec(line))) {
+    match = /^([ \t]*\[)(\w+)\]/gm.exec(line);
+    if (!match) { match = /^(['" \t]*)([-\w]+)['" \t]*=/gm.exec(line); }
+    if (match) {
         const indent = match[1].length;
         const word = match[2].toLowerCase();
-        const withoutDashes = word.replace(/-/g, '');
-        let dictionary: string[];
-        if (match[0].endsWith(']')) dictionary = possibleSections;
-        else {
-            dictionary = possibleOptions;
-            if (withoutDashes.startsWith("column")) return null;
+        const withoutDashes = word.replace(/-/g, "");
+        const map = new Map<string, string[]>();
+        if (match[0].endsWith("]")) {
+            map.set("dictionary", possibleSections);
+        } else {
+            if (withoutDashes.startsWith("column")) { return null; }
+            map.set("dictionary", possibleOptions);
         }
-        if (!dictionary.find(value => value === withoutDashes)) {
-            const message = suggestionMessage(word, dictionary);
+        if (!isVarDeclared(withoutDashes, map)) {
+            const message = suggestionMessage(word, map);
             const location: Location = {
-                uri: uri,
                 range: {
-                    start: { line: i, character: indent },
-                    end: { line: i, character: indent + word.length }
-                }
+                    end: { line: i, character: indent + word.length },
+                    start: { line: i, character: indent }
+                }, uri
             };
             return Shared.createDiagnostic(location, DiagnosticSeverity.Error, message);
         }
@@ -47,242 +50,274 @@ function spellingCheck(line: string, uri: string, i: number): Diagnostic | null 
     return null;
 }
 
-enum ControlSequence {
-    For = "for",
-    Csv = "csv",
-    EndCsv = "endcsv",
-    EndFor = "endfor",
-    If = "if",
-    ElseIf = "elseif",
-    Else = "else",
-    EndIf = "endif",
-    Script = "script",
-    EndScript = "endscript",
-    List = "list",
-    Var = "var",
-    EndVar = "endvar",
-    EndList = "endlist"
-}
-
 class FoundKeyword {
-    keyword: ControlSequence;
-    range: Range;
-}
-
-class ControlSequenceUtil {
     public static createRegex(): RegExp {
         return /^([ \t]*)(endvar|endcsv|endfor|elseif|endif|endscript|endlist|script|else|if|list|for|csv|var)\b/gm;
     }
 
     public static parseControlSequence(regex: RegExp, line: string, i: number): FoundKeyword | null {
         const match = regex.exec(line);
-        if (match === null) return null;
+        if (match === null) { return null; }
         const keywordStart = match[1].length;
         return {
-            keyword: ControlSequenceUtil.toSequence(match[2]),
-            range: { start: { line: i, character: keywordStart }, end: { line: i, character: keywordStart + match[2].length } }
+            keyword: match[2],
+            range: {
+                end: { line: i, character: keywordStart + match[2].length },
+                start: { line: i, character: keywordStart }
+            }
         };
     }
 
-    private static toSequence(word: string): ControlSequence {
-        switch (word) {
-            case "csv": return ControlSequence.Csv;
-            case "endcsv": return ControlSequence.EndCsv;
-            case "for": return ControlSequence.For;
-            case "endfor": return ControlSequence.EndFor;
-            case "if": return ControlSequence.If;
-            case "elseif": return ControlSequence.ElseIf;
-            case "else": return ControlSequence.Else;
-            case "endif": return ControlSequence.EndIf;
-            case "script": return ControlSequence.Script;
-            case "endscript": return ControlSequence.EndScript;
-            case "list": return ControlSequence.List;
-            case "endlist": return ControlSequence.EndList;
-            case "var": return ControlSequence.Var;
-            case "endvar": return ControlSequence.EndVar;
-            default: throw new Error("Update control stackHead switch-case!");
-        }
-    }
+    public keyword: string;
+    public range: Range;
+
 }
 
 function countCsvColumns(line: string): number {
     const regex = /(['"]).+?\1|[()-\w.]+/g;
     let counter = 0;
-    while (regex.exec(line)) counter++;
+    while (regex.exec(line)) { counter++; }
     return counter;
 }
 
-function checkEnd(expectedEnd: ControlSequence, nestedStack: FoundKeyword[], foundKeyword: FoundKeyword, uri: string): Diagnostic | null {
+function checkEnd(expectedEnd: string, nestedStack: FoundKeyword[],
+                  foundKeyword: FoundKeyword, uri: string): Diagnostic | null {
     const stackHead = nestedStack.pop();
-    if (stackHead !== undefined && stackHead.keyword === expectedEnd) return null;
-    if (stackHead !== undefined) nestedStack.push(stackHead); // push found keyword back
-    const unfinishedIndex = nestedStack.findIndex(value =>
+    if (stackHead !== undefined && stackHead.keyword === expectedEnd) { return null; }
+    if (stackHead !== undefined) { nestedStack.push(stackHead); } // push found keyword back
+    const unfinishedIndex = nestedStack.findIndex((value) =>
         (value === undefined) ? false : value.keyword === expectedEnd
     );
     if (stackHead === undefined || unfinishedIndex === -1) {
         return Shared.createDiagnostic(
-            { uri: uri, range: foundKeyword.range }, DiagnosticSeverity.Error,
+            { uri, range: foundKeyword.range }, DiagnosticSeverity.Error,
             `${foundKeyword.keyword} has no matching ${expectedEnd}`
         );
     } else {
         delete nestedStack[unfinishedIndex];
         return Shared.createDiagnostic(
-            { uri: uri, range: foundKeyword.range }, DiagnosticSeverity.Error,
+            { uri, range: foundKeyword.range }, DiagnosticSeverity.Error,
             `${expectedEnd} has finished before ${stackHead.keyword}`
         );
     }
 }
 
-class DeAlias {
-    value: string;
-    position: Range;
+function isVarDeclared(variable: string, dictionaries: Map<string, string[]>): boolean {
+    let result = false;
+    dictionaries.forEach((dictionary) => {
+        dictionary.forEach((value) => {
+            if (variable === value) { result = true; }
+        });
+    });
+    return result;
+}
+
+function addToArray(map: Map<string, string[]>, key: string, severity: DiagnosticSeverity,
+                    match: RegExpExecArray, uri: string, i: number): Diagnostic | null {
+    let diagnostic: Diagnostic = null;
+    const variable = match[2];
+    if (isVarDeclared(variable, map)) {
+        const startPosition = match.index + match[1].length;
+        diagnostic = Shared.createDiagnostic(
+            {
+                range: {
+                    end: { line: i, character: startPosition + variable.length },
+                    start: { line: i, character: startPosition }
+                }, uri
+            },
+            severity, `${variable} is already defined`
+        );
+    } else {
+        const array = map.get(key);
+        array.push(variable);
+        map.set(key, array);
+    }
+    return diagnostic;
 }
 
 export function lineByLine(textDocument: TextDocument): Diagnostic[] {
     const result: Diagnostic[] = [];
-    const lines: string[] = Shared.deleteComments(textDocument.getText()).split('\n');
+    const lines: string[] = Shared.deleteComments(textDocument.getText()).split("\n");
     const nestedStack: FoundKeyword[] = [];
     let isUserDefined = false; // to disable spelling check
     let isScript = false; // to disable everything
-    let isCsv = false, isFor = false; // to perform validation
+    let isCsv = false; // to perform validation
+    let isFor = false;
+    let isIf = false;
     let csvColumns = 0; // to validate csv
-    const listNames: string[] = [], forVariables: string[] = []; // to validate @{var}
-    const varNames: string[] = [], csvNames: string[] = []; // to validate `in ...` statements
-    const aliases: string[] = [], deAliases: DeAlias[] = []; // to validate `value = value('alias')`
-    const deAliasRegex = /(^\s*value\s*=.*value\((['"]))(\w+)\2\).*$/m;
-    const aliasRegex = /^\s*alias\s*=\s*(\w+)\s*$/m;
+    const variables = new Map<string, string[]>(); // to validate variables
+    const settings = new Map<string, string[]>(); // to validate variables
+    const aliases = new Map<string, string[]>(); // to validate `value = value('alias')`
+    aliases.set("aliases", []);
+    settings.set("settings", []);
+    variables.set("listNames", []);
+    variables.set("varNames", []);
+    variables.set("csvNames", []);
+    variables.set("forVariables", []);
+    const deAliases: FoundKeyword[] = [];
     let match: RegExpExecArray;
 
     for (let i = 0; i < lines.length; i++) {
-        let line = lines[i];
+        const line = lines[i];
 
         // handle tags
-        if (match = /^[\t ]*\[(tags?|keys)\][\t ]*/m.exec(line)) isUserDefined = true;
-        else if (isUserDefined && (match = /^[\t ]*\[\w+\][\t ]*/m.exec(line)) !== null) isUserDefined = false;
+        match = /^[\t ]*\[(tags?|keys)\][\t ]*/m.exec(line);
+        if (match) {
+            isUserDefined = true;
+        } else if (/^[\t ]*\[\w+\][\t ]*/m.test(line)) {
+            isUserDefined = false;
+            settings.set("settings", []);
+        }
 
-        // prepare regex to let 'g' key do its work
-        const regex = ControlSequenceUtil.createRegex();
-        let foundKeyword = ControlSequenceUtil.parseControlSequence(regex, line, i);
-
+        // validate aliases, spellings, repetition of settings
         if (!isUserDefined && !isScript) {
-            if (match = aliasRegex.exec(line)) aliases.push(match[1]);
-            if (match = deAliasRegex.exec(line)) {
+            // aliases
+            match = /(^\s*alias\s*=\s*)(\w+)\s*$/m.exec(line);
+            const deAliasRegex = /(^\s*value\s*=.*value\((['"]))(\w+)\2\).*$/m;
+            if (match) {
+                const diagnostic = addToArray(aliases, "aliases", DiagnosticSeverity.Error, match, textDocument.uri, i);
+                if (diagnostic) { result.push(diagnostic); }
+            } else if (deAliasRegex.test(line)) {
+                match = deAliasRegex.exec(line);
                 deAliases.push({
-                    value: match[3], position: {
-                        start: { line: i, character: match[1].length },
-                        end: { line: i, character: match[1].length + match[3].length }
+                    keyword: match[3], range: {
+                        end: { line: i, character: match[1].length + match[3].length },
+                        start: { line: i, character: match[1].length }
                     }
                 });
             }
+
+            // spelling
             const misspelling = spellingCheck(line, textDocument.uri, i);
-            if (misspelling) result.push(misspelling);
+            if (misspelling) { result.push(misspelling); }
+
+            // repetition
+            match = /(^\s*)([-\w]+)\s*=/.exec(line);
+            if (match) {
+                const target: string = (isIf) ? "if" : "settings";
+                const diagnostic = addToArray(settings, target, DiagnosticSeverity.Warning, match, textDocument.uri, i);
+                if (diagnostic) { result.push(diagnostic); }
+            }
         }
 
+        // validate for variables
+        if (isFor) {
+            const atRegexp = /@{.+?}/g;
+            match = atRegexp.exec(line);
+            while (match) {
+                const substr = match[0];
+                const startPosition = match.index;
+                const varRegexp = /[a-zA-Z_]\w*(?!\w*["\('])/g;
+                match = varRegexp.exec(substr);
+                while (match) {
+                    if (substr.charAt(match.index - 1) === ".") {
+                        match = varRegexp.exec(substr);
+                        continue;
+                    }
+                    const variable = match[0];
+                    if (!isVarDeclared(variable, variables)) {
+                        const position = startPosition + match.index;
+                        const message = suggestionMessage(variable, variables);
+                        result.push(Shared.createDiagnostic(
+                            {
+                                range: {
+                                    end: { line: i, character: position + variable.length },
+                                    start: { line: i, character: position }
+                                }, uri: textDocument.uri
+                            },
+                            DiagnosticSeverity.Error, message
+                        ));
+                    }
+                    match = varRegexp.exec(substr);
+                }
+                match = atRegexp.exec(line);
+            }
+        }
+        // prepare regex to let 'g' key do its work
+        const regex = FoundKeyword.createRegex();
+        let foundKeyword = FoundKeyword.parseControlSequence(regex, line, i);
+
         // validate CSV
-        if (isCsv && (foundKeyword === null || foundKeyword.keyword !== ControlSequence.EndCsv)) {
+        if (isCsv && (foundKeyword === null || foundKeyword.keyword !== "endcsv")) {
             const columns = countCsvColumns(line);
             if (columns !== csvColumns && !/^[ \t]*$/m.test(line)) {
                 result.push(Shared.createDiagnostic(
                     {
-                        uri: textDocument.uri,
                         range: {
-                            start: { line: i, character: 0 },
-                            end: { line: i, character: line.length }
-                        }
-                    }, DiagnosticSeverity.Error, `Expected ${csvColumns} columns, but found ${columns}`
+                            end: { line: i, character: line.length },
+                            start: { line: i, character: 0 }
+                        }, uri: textDocument.uri
+                    },
+                    DiagnosticSeverity.Error, `Expected ${csvColumns} columns, but found ${columns}`
                 ));
             }
             continue;
         }
 
-        // validate for variables
-        if (isFor) {
-            const regex = /@{.+?}/g;
-            while (match = regex.exec(line)) {
-                const substr = match[0];
-                const startPosition = match.index;
-                const regexp = /[a-zA-Z_]\w*(?!\w*["\('])/g;
-                while (match = regexp.exec(substr)) {
-                    if (substr.charAt(match.index - 1) === '.') continue;
-                    const variable = match[0];
-                    if (!forVariables.find(name => name === variable) && !listNames.find(name => name === variable)
-                        && !varNames.find(name => name === variable) && !csvNames.find(name => name === variable)) {
-                        const position = startPosition + match.index;
-                        const message = suggestionMessage(variable, forVariables);
-                        result.push(Shared.createDiagnostic(
-                            {
-                                uri: textDocument.uri,
-                                range: {
-                                    start: { line: i, character: position },
-                                    end: { line: i, character: position + variable.length }
-                                }
-                            }, DiagnosticSeverity.Error, message
-                        ));
-                    }
-                }
-            }
-        }
-
         while (foundKeyword !== null) { // `while` can handle several keywords per line
 
             // handle scripts
-            if (foundKeyword.keyword === ControlSequence.EndScript) {
+            if (foundKeyword.keyword === "endscript") {
                 const stackHead = nestedStack.pop();
-                if (stackHead === undefined || stackHead.keyword !== ControlSequence.Script) {
-                    if (stackHead !== undefined) nestedStack.push(stackHead);
+                if (stackHead === undefined || stackHead.keyword !== "script") {
+                    if (stackHead !== undefined) { nestedStack.push(stackHead); }
                     result.push(Shared.createDiagnostic(
                         { uri: textDocument.uri, range: foundKeyword.range }, DiagnosticSeverity.Error,
-                        `${foundKeyword.keyword} has no matching ${ControlSequence.Script}`
+                        `${foundKeyword.keyword} has no matching script`
                     ));
                 }
                 isScript = false;
-                foundKeyword = ControlSequenceUtil.parseControlSequence(regex, line, i);
-                if (foundKeyword === null) break;
-                else continue;
-            } else if (isScript) break;
+                foundKeyword = FoundKeyword.parseControlSequence(regex, line, i);
+                if (foundKeyword === null) { break; }
+            } else if (isScript) { break; }
 
             switch (foundKeyword.keyword) {
-                case ControlSequence.EndCsv: {
+                case "endcsv": {
                     isCsv = false;
-                    const diagnostic = checkEnd(ControlSequence.Csv, nestedStack, foundKeyword, textDocument.uri);
-                    if (diagnostic !== null) result.push(diagnostic);
+                    const diagnostic = checkEnd("csv", nestedStack, foundKeyword, textDocument.uri);
+                    if (diagnostic !== null) { result.push(diagnostic); }
                     break;
                 }
-                case ControlSequence.EndIf: {
-                    const diagnostic = checkEnd(ControlSequence.If, nestedStack, foundKeyword, textDocument.uri);
-                    if (diagnostic !== null) result.push(diagnostic);
+                case "endif": {
+                    settings.set("if", []);
+                    const diagnostic = checkEnd("if", nestedStack, foundKeyword, textDocument.uri);
+                    isIf = false;
+                    if (diagnostic !== null) { result.push(diagnostic); }
                     break;
                 }
-                case ControlSequence.EndFor: {
+                case "endfor": {
                     isFor = false;
+                    const forVariables = variables.get("forVariables");
                     forVariables.pop();
-                    const diagnostic = checkEnd(ControlSequence.For, nestedStack, foundKeyword, textDocument.uri);
-                    if (diagnostic !== null) result.push(diagnostic);
+                    variables.set("forVariables", forVariables);
+                    const diagnostic = checkEnd("for", nestedStack, foundKeyword, textDocument.uri);
+                    if (diagnostic !== null) { result.push(diagnostic); }
                     break;
                 }
-                case ControlSequence.EndList: {
-                    const diagnostic = checkEnd(ControlSequence.List, nestedStack, foundKeyword, textDocument.uri);
-                    if (diagnostic !== null) result.push(diagnostic);
+                case "endlist": {
+                    const diagnostic = checkEnd("list", nestedStack, foundKeyword, textDocument.uri);
+                    if (diagnostic !== null) { result.push(diagnostic); }
                     break;
                 }
-                case ControlSequence.EndVar: {
-                    const diagnostic = checkEnd(ControlSequence.Var, nestedStack, foundKeyword, textDocument.uri);
-                    if (diagnostic !== null) result.push(diagnostic);
+                case "endvar": {
+                    const diagnostic = checkEnd("var", nestedStack, foundKeyword, textDocument.uri);
+                    if (diagnostic !== null) { result.push(diagnostic); }
                     break;
                 }
-                case ControlSequence.Else:
-                case ControlSequence.ElseIf: {
+                case "else":
+                case "elseif": {
+                    settings.set("if", []);
                     const stackHead = nestedStack.pop();
-                    const ifKeyword = nestedStack.find(value =>
-                        (value === undefined) ? false : value.keyword === ControlSequence.If
+                    const ifKeyword = nestedStack.find((value) =>
+                        (value === undefined) ? false : value.keyword === "if"
                     );
                     if (stackHead === undefined ||
-                        (stackHead.keyword !== ControlSequence.If && ifKeyword === undefined)) {
+                        (stackHead.keyword !== "if" && ifKeyword === undefined)) {
                         result.push(Shared.createDiagnostic(
                             { uri: textDocument.uri, range: foundKeyword.range }, DiagnosticSeverity.Error,
-                            `${foundKeyword.keyword} has no matching ${ControlSequence.If}`
+                            `${foundKeyword.keyword} has no matching if`
                         ));
-                    } else if (stackHead.keyword !== ControlSequence.If) {
+                    } else if (stackHead.keyword !== "if") {
                         result.push(Shared.createDiagnostic(
                             { uri: textDocument.uri, range: foundKeyword.range }, DiagnosticSeverity.Error,
                             `${foundKeyword.keyword} has started before ${stackHead} has finished`
@@ -291,84 +326,103 @@ export function lineByLine(textDocument: TextDocument): Diagnostic[] {
                     nestedStack.push(stackHead);
                     break;
                 }
-                case ControlSequence.Csv: {
+                case "csv": {
                     isCsv = true;
                     let header: string;
                     if (/=[ \t]*$/m.test(line)) {
-                        let j = i;
-                        while ((header = lines[++j]) !== undefined && /^[ \t]*$/m.test(header));
+                        let j = i + 1;
+                        header = lines[j];
+                        while (header && /^[ \t]*$/m.test(header)) {
+                            header = lines[++j];
+                        }
+                    } else { header = line.substring(/=/.exec(line).index + 1); }
+                    match = /(csv[ \t]+)(\w+)[ \t]*=/.exec(line);
+                    if (match) {
+                        const diagnostic = addToArray(variables, "csvNames", DiagnosticSeverity.Error, match, textDocument.uri, i);
+                        if (diagnostic) { result.push(diagnostic); }
                     }
-                    else header = line.substring(/=/.exec(line).index + 1);
-                    if (match = /csv[ \t]+(\w+)[ \t]*=/.exec(line)) csvNames.push(match[1]);
                     csvColumns = countCsvColumns(header);
                     nestedStack.push(foundKeyword);
                     break;
                 }
-                case ControlSequence.Var: {
-                    if (/=\s*(\[|\{)(|.*,)\s*$/m.test(line)) nestedStack.push(foundKeyword);
-                    if (match = /var\s*(\w+)\s*=/.exec(line)) varNames.push(match[1]);
-                    break;
-                }
-                case ControlSequence.List: {
-                    if (match = /^\s*list\s+(\w+)\s+=/.exec(line)) listNames.push(match[1]);
-                    if (/(=|,)[ \t]*$/m.test(line)) nestedStack.push(foundKeyword);
-                    else {
-                        let j = i;
-                        while ((j < lines.length) && /^[ \t]*$/m.test(lines[++j]));
-                        if (j !== lines.length && (/^[ \t]*,/.test(lines[j]) || /\bendlist\b/.test(lines[j])))
-                            nestedStack.push(foundKeyword);
+                case "var": {
+                    if (/=\s*(\[|\{)(|.*,)\s*$/m.test(line)) { nestedStack.push(foundKeyword); }
+                    match = /(var\s*)(\w+)\s*=/.exec(line);
+                    if (match) {
+                        const diagnostic = addToArray(variables, "varNames", DiagnosticSeverity.Error, match, textDocument.uri, i);
+                        if (diagnostic) { result.push(diagnostic); }
                     }
                     break;
                 }
-                case ControlSequence.For: {
+                case "list": {
+                    match = /(^\s*list\s+)(\w+)\s+=/.exec(line);
+                    if (match) {
+                        const diagnostic = addToArray(variables, "listNames", DiagnosticSeverity.Error, match, textDocument.uri, i);
+                        if (diagnostic) { result.push(diagnostic); }
+                    }
+                    if (/(=|,)[ \t]*$/m.test(line)) {
+                        nestedStack.push(foundKeyword);
+                    } else {
+                        let j = i + 1;
+                        while ((j < lines.length) && /^[ \t]*$/m.test(lines[j])) {
+                            j++;
+                        }
+                        if (j !== lines.length && (/^[ \t]*,/.test(lines[j]) || /\bendlist\b/.test(lines[j]))) {
+                            nestedStack.push(foundKeyword);
+                        }
+                    }
+                    break;
+                }
+                case "for": {
                     isFor = true;
                     nestedStack.push(foundKeyword);
-                    if (match = /^\s*for\s+(\w+)\s+in/m.exec(line)) {
+                    match = /(^\s*for\s+)(\w+)\s+in/m.exec(line);
+                    if (match) {
                         const matching = match;
-                        forVariables.push(match[1]);
-                        if (match = /^(\s*for\s+\w+\s+in\s+)(\w+)\s*$/m.exec(line)) {
+                        match = /^(\s*for\s+\w+\s+in\s+)(\w+)\s*$/m.exec(line);
+                        if (match) {
                             const variable = match[2];
-                            if (!listNames.find(name => name === variable)
-                                && !varNames.find(name => name === variable)
-                                && !csvNames.find(name => name === variable)) {
-                                const dictionary: string[] = [];
-                                listNames.forEach(name => dictionary.push(name));
-                                varNames.forEach(name => dictionary.push(name));
-                                csvNames.forEach(name => dictionary.push(name));
-                                const message = suggestionMessage(variable, dictionary);
+                            if (!isVarDeclared(variable, variables)) {
+                                const message = suggestionMessage(variable, variables);
                                 result.push(Shared.createDiagnostic(
                                     {
-                                        uri: textDocument.uri,
                                         range: {
-                                            start: { line: i, character: match[1].length },
                                             end: { line: i, character: match[1].length + variable.length },
-                                        }
-                                    }, DiagnosticSeverity.Error, message
+                                            start: { line: i, character: match[1].length }
+                                        }, uri: textDocument.uri
+                                    },
+                                    DiagnosticSeverity.Error, message
                                 ));
                             }
                         } else {
                             result.push(Shared.createDiagnostic(
                                 {
-                                    uri: textDocument.uri,
                                     range: {
-                                        start: { line: i, character: matching[0].length + 1 },
-                                        end: { line: i, character: matching[0].length + 2 }
-                                    }
-                                }, DiagnosticSeverity.Error, "Empty 'in' statement"
-                            ))
+                                        end: { line: i, character: matching[0].length + 2 },
+                                        start: { line: i, character: matching[0].length + 1 }
+                                    }, uri: textDocument.uri
+                                },
+                                DiagnosticSeverity.Error, "Empty 'in' statement"
+                            ));
                         }
+                        const diagnostic = addToArray(variables, "forVariables", DiagnosticSeverity.Error, matching, textDocument.uri, i);
+                        if (diagnostic) { result.push(diagnostic); }
                     }
                     break;
                 }
-                case ControlSequence.If: {
+                case "if": {
                     nestedStack.push(foundKeyword);
+                    isIf = true;
+                    settings.set("if", []);
                     break;
                 }
-                case ControlSequence.Script: {
+                case "script": {
                     if (/^[ \t]*script[ \t]*=[ \t]*\S+.*$/m.test(line)) {
-                        let j = i;
-                        while (++j < lines.length && !(/\bscript\b/.test(lines[j]) || /\bendscript\b/.test(lines[j])));
-                        if (j === lines.length || /\bscript\b/.test(lines[j])) break;
+                        let j = i + 1;
+                        while (j < lines.length && !(/\bscript\b/.test(lines[j]) || /\bendscript\b/.test(lines[j]))) {
+                            j++;
+                        }
+                        if (j === lines.length || /\bscript\b/.test(lines[j])) { break; }
                     }
                     nestedStack.push(foundKeyword);
                     isScript = true;
@@ -377,21 +431,21 @@ export function lineByLine(textDocument: TextDocument): Diagnostic[] {
                 default: throw new Error("Update switch-case statement!");
             }
 
-            foundKeyword = ControlSequenceUtil.parseControlSequence(regex, line, i);
+            foundKeyword = FoundKeyword.parseControlSequence(regex, line, i);
         }
     }
 
-    deAliases.forEach(deAlias => {
-        if (!aliases.find(alias => deAlias.value === alias)) {
-            const message = suggestionMessage(deAlias.value, aliases);
+    deAliases.forEach((deAlias) => {
+        if (!isVarDeclared(deAlias.keyword, aliases)) {
+            const message = suggestionMessage(deAlias.keyword, aliases);
             result.push(Shared.createDiagnostic(
-                { uri: textDocument.uri, range: deAlias.position },
+                { uri: textDocument.uri, range: deAlias.range },
                 DiagnosticSeverity.Error, message
-            ))
+            ));
         }
     });
 
-    diagnosticForLeftKeywords(nestedStack, textDocument.uri).forEach(diagnostic => {
+    diagnosticForLeftKeywords(nestedStack, textDocument.uri).forEach((diagnostic) => {
         result.push(diagnostic);
     });
 
@@ -402,47 +456,47 @@ function diagnosticForLeftKeywords(nestedStack: FoundKeyword[], uri: string): Di
     const result: Diagnostic[] = [];
     for (let i = 0, length = nestedStack.length; i < length; i++) {
         const nestedConstruction = nestedStack[i];
-        if (nestedConstruction === null || nestedConstruction === undefined) continue;
+        if (nestedConstruction === null || nestedConstruction === undefined) { continue; }
         switch (nestedConstruction.keyword) {
-            case ControlSequence.For: {
+            case "for": {
                 result.push(Shared.createDiagnostic(
-                    { uri: uri, range: nestedConstruction.range }, DiagnosticSeverity.Error,
-                    `${nestedConstruction.keyword} has no matching ${ControlSequence.EndFor}`
+                    { uri, range: nestedConstruction.range }, DiagnosticSeverity.Error,
+                    `${nestedConstruction.keyword} has no matching endfor`
                 ));
                 break;
             }
-            case ControlSequence.If: {
+            case "if": {
                 result.push(Shared.createDiagnostic(
-                    { uri: uri, range: nestedConstruction.range }, DiagnosticSeverity.Error,
-                    `${nestedConstruction.keyword} has no matching ${ControlSequence.EndIf}`
+                    { uri, range: nestedConstruction.range }, DiagnosticSeverity.Error,
+                    `${nestedConstruction.keyword} has no matching endif`
                 ));
                 break;
             }
-            case ControlSequence.Script: {
+            case "script": {
                 result.push(Shared.createDiagnostic(
-                    { uri: uri, range: nestedConstruction.range }, DiagnosticSeverity.Error,
-                    `${nestedConstruction.keyword} has no matching ${ControlSequence.EndScript}`
+                    { uri, range: nestedConstruction.range }, DiagnosticSeverity.Error,
+                    `${nestedConstruction.keyword} has no matching endscript`
                 ));
                 break;
             }
-            case ControlSequence.List: {
+            case "list": {
                 result.push(Shared.createDiagnostic(
-                    { uri: uri, range: nestedConstruction.range }, DiagnosticSeverity.Error,
-                    `${nestedConstruction.keyword} has no matching ${ControlSequence.EndList}`
+                    { uri, range: nestedConstruction.range }, DiagnosticSeverity.Error,
+                    `${nestedConstruction.keyword} has no matching endlist`
                 ));
                 break;
             }
-            case ControlSequence.Csv: {
+            case "csv": {
                 result.push(Shared.createDiagnostic(
-                    { uri: uri, range: nestedConstruction.range }, DiagnosticSeverity.Error,
-                    `${nestedConstruction.keyword} has no matching ${ControlSequence.EndCsv}`
+                    { uri, range: nestedConstruction.range }, DiagnosticSeverity.Error,
+                    `${nestedConstruction.keyword} has no matching endcsv`
                 ));
                 break;
             }
-            case ControlSequence.Var: {
+            case "var": {
                 result.push(Shared.createDiagnostic(
-                    { uri: uri, range: nestedConstruction.range }, DiagnosticSeverity.Error,
-                    `${nestedConstruction.keyword} has no matching ${ControlSequence.EndVar}`
+                    { uri, range: nestedConstruction.range }, DiagnosticSeverity.Error,
+                    `${nestedConstruction.keyword} has no matching endvar`
                 ));
                 break;
             }
