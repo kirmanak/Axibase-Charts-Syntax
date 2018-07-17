@@ -159,6 +159,7 @@ export function lineByLine(textDocument: TextDocument): Diagnostic[] {
 
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
+        if (/^[ \t]*$/m.test(line) && isUserDefined) { isUserDefined = false; }
 
         // handle tags
         match = /^[\t ]*\[(tags?|keys)\][\t ]*/m.exec(line);
@@ -197,6 +198,23 @@ export function lineByLine(textDocument: TextDocument): Diagnostic[] {
                 const target: string = (isIf) ? "if" : "settings";
                 const diagnostic = addToArray(settings, target, DiagnosticSeverity.Warning, match, textDocument.uri, i);
                 if (diagnostic) { result.push(diagnostic); }
+            }
+        } else if (!isScript && /(^[ \t]*)(\w+)[ \t]*=/.test(line)) {
+            match = /(^[ \t]*)(\w+)[ \t]*=/.exec(line);
+            const setting = match[2];
+            const map = new Map<string, string[]>();
+            map.set("possibleOptions", possibleOptions);
+            if (isVarDeclared(setting, map)) {
+                result.push(Shared.createDiagnostic(
+                    {
+                        range: {
+                            end: { line: i, character: match[1].length + match[2].length },
+                            start: { line: i, character: match[1].length }
+                        },
+                        uri: textDocument.uri
+                    },
+                    DiagnosticSeverity.Information, `${setting} is interpreted as a tag`
+                ));
             }
         }
 
