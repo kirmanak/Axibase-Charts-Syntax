@@ -1,5 +1,6 @@
 import * as Levenshtein from "levenshtein";
 import { Diagnostic, DiagnosticSeverity, Location, Range, TextDocument } from "vscode-languageserver";
+import * as resources from "./resources";
 import * as Shared from "./sharedFunctions";
 
 function suggestionMessage(word: string, dictionaries: Map<string, string[]>): string {
@@ -30,10 +31,10 @@ function spellingCheck(line: string, uri: string, i: number): Diagnostic | null 
         const withoutDashes = word.replace(/-/g, "");
         const map = new Map<string, string[]>();
         if (match[0].endsWith("]")) {
-            map.set("dictionary", possibleSections);
+            map.set("dictionary", resources.possibleSections);
         } else {
             if (withoutDashes.startsWith("column")) { return null; }
-            map.set("dictionary", possibleOptions);
+            map.set("dictionary", resources.possibleOptions);
         }
         if (!isVarDeclared(withoutDashes, map)) {
             const message = suggestionMessage(word, map);
@@ -128,11 +129,45 @@ function addToArray(map: Map<string, string[]>, key: string, severity: Diagnosti
             severity, `${variable} is already defined`
         );
     } else {
-        const array = map.get(key);
+        let array = map.get(key);
+        if (!array) { array = []; }
         array.push(variable);
         map.set(key, array);
     }
     return diagnostic;
+}
+
+function checkPreviousSection(previousSection: FoundKeyword, settings: Map<string, string[]>,
+                              uri: string, parentSettings: Map<string, string[]>): Diagnostic[] {
+    const result: Diagnostic[] = [];
+    const requiredSettings = resources.requiredSectionSettingsMap.get(previousSection.keyword);
+    if (requiredSettings) {
+        requiredSettings.forEach((options) => {
+            let foundOption = options.find((option) => isVarDeclared(option, settings));
+            if (!foundOption) {
+                // we have not found the setting in the section itself
+                // trying to use in parent sections
+                const parents = resources.getParents(previousSection.keyword);
+                if (parents.length !== 0) {
+                    const foundInParents = parents.find((parent) => {
+                        const parentDeclared = parentSettings.get(parent);
+                        if (parentDeclared) {
+                            foundOption = options.find((option) => parentDeclared.find((declared) => option === declared) !== undefined);
+                            return foundOption !== undefined;
+                        } else { return false; }
+                    });
+                    if (!foundInParents) {
+                        result.push(Shared.createDiagnostic(
+                            { range: previousSection.range, uri },
+                            DiagnosticSeverity.Error, `${options[0]} is required`
+                        ));
+                    }
+                }
+            }
+        });
+    }
+
+    return result;
 }
 
 export function lineByLine(textDocument: TextDocument): Diagnostic[] {
@@ -145,8 +180,10 @@ export function lineByLine(textDocument: TextDocument): Diagnostic[] {
     let isFor = false;
     let isIf = false;
     let csvColumns = 0; // to validate csv
+    let previousSection: FoundKeyword = null; // to validate required settings
     const variables = new Map<string, string[]>(); // to validate variables
     const settings = new Map<string, string[]>(); // to validate variables
+    const parentSettings = new Map<string, string[]>(); // to validate variables
     const aliases = new Map<string, string[]>(); // to validate `value = value('alias')`
     aliases.set("aliases", []);
     settings.set("settings", []);
@@ -162,12 +199,32 @@ export function lineByLine(textDocument: TextDocument): Diagnostic[] {
         if (/^[ \t]*$/m.test(line) && isUserDefined) { isUserDefined = false; }
 
         // handle tags
-        match = /^[\t ]*\[(tags?|keys)\][\t ]*/m.exec(line);
+        match = /(^[\t ]*\[)(\w+)\][\t ]*/m.exec(line);
         if (match) {
-            isUserDefined = true;
-        } else if (/^[\t ]*\[\w+\][\t ]*/m.test(line)) {
-            isUserDefined = false;
-            settings.set("settings", []);
+            if (/tags?|keys/.test(match[2])) {
+                isUserDefined = true;
+            } else {
+                if (previousSection) {
+                    checkPreviousSection(previousSection, settings, textDocument.uri, parentSettings).forEach((diagnostic) => {
+                        result.push(diagnostic);
+                    });
+                }
+                isUserDefined = false;
+                settings.set("settings", []);
+            }
+            previousSection = {
+                range: {
+                    end: { line: i, character: match[1].length + match[2].length },
+                    start: { line: i, character: match[1].length }
+                },
+                keyword: match[2]
+            };
+            if (isVarDeclared(previousSection.keyword, resources.parentSections)) {
+                const array = parentSettings.get(previousSection.keyword);
+                if (array && array.length !== 0) {
+                    parentSettings.set(previousSection.keyword, []);
+                }
+            }
         }
 
         // validate aliases, spellings, repetition of settings
@@ -198,13 +255,16 @@ export function lineByLine(textDocument: TextDocument): Diagnostic[] {
                 const target: string = (isIf) ? "if" : "settings";
                 const diagnostic = addToArray(settings, target, DiagnosticSeverity.Warning, match, textDocument.uri, i);
                 if (diagnostic) { result.push(diagnostic); }
+                if (previousSection && isVarDeclared(previousSection.keyword, resources.parentSections)) {
+                    addToArray(parentSettings, previousSection.keyword, DiagnosticSeverity.Hint, match, textDocument.uri, i);
+                }
             }
         } else if (!isScript && /(^[ \t]*)([-\w]+)[ \t]*=/.test(line)) {
             match = /(^[ \t]*)([-\w]+)[ \t]*=/.exec(line);
             const setting = match[2].toLowerCase().replace(/-/g, "");
             console.log(setting);
             const map = new Map<string, string[]>();
-            map.set("possibleOptions", possibleOptions);
+            map.set("possibleOptions", resources.possibleOptions);
             if (isVarDeclared(setting, map)) {
                 result.push(Shared.createDiagnostic(
                     {
@@ -468,6 +528,12 @@ export function lineByLine(textDocument: TextDocument): Diagnostic[] {
         result.push(diagnostic);
     });
 
+    if (previousSection) {
+        checkPreviousSection(previousSection, settings, textDocument.uri, parentSettings).forEach((diagnostic) => {
+            result.push(diagnostic);
+        });
+    }
+
     return result;
 }
 
@@ -524,90 +590,3 @@ function diagnosticForLeftKeywords(nestedStack: FoundKeyword[], uri: string): Di
 
     return result;
 }
-
-const possibleOptions = [
-    "actionenable", "add", "addmeta", "aheadtimespan", "alert",
-    "alertexpression", "alertrowstyle", "alertstyle", "alias", "align", "arcs",
-    "arrowlength", "arrows", "attribute", "audio", "audioalert",
-    "audioonload", "autoheight", "autopadding", "autoperiod", "autoscale",
-    "axis", "axislabel", "axistitle", "axistitleright", "bar", "barcount",
-    "batchsize", "batchupdate", "borderwidth", "bottomaxis", "bundle",
-    "bundled", "buttons", "cache", "capitalize", "caption", "captionstyle",
-    "case", "centralizecolumns", "centralizeticks", "changefield", "chartmode",
-    "circle", "class", "collapsible", "color", "colorrange", "colors",
-    "columnlabelformat", "columns", "connect", "connectvalues", "context",
-    "contextheight", "contextpath", "counter", "counterposition", "current",
-    "currentperiodstyle", "data", "datatype", "dayformat", "default",
-    "defaultcolor", "defaultsize", "depth", "dialogmaximize", "disablealert",
-    "disconnect", "disconnectcount", "disconnectednodedisplay",
-    "disconnectinterval", "disconnectvalue", "display", "displaydate",
-    "displayinlegend", "displaylabels", "displayother", "displaypanels",
-    "displaytags", "displayticks", "displaytip", "displaytotal",
-    "displayvalues", "dummy", "duration", "effects", "empty",
-    "emptyrefreshinterval", "emptythreshold", "enabled", "end", "endtime",
-    "endworkingminutes", "entities", "entitiesbatchupdate", "entity",
-    "entityexpression", "entitygroup", "entitylabel", "error",
-    "errorrefreshinterval", "exact", "exactmatch", "expand", "expandpanels",
-    "expandtags", "expiretimespan", "fasten", "fillvalue", "filter",
-    "filterrange", "fitsvg", "fontscale", "fontsize", "forecast",
-    "forecastname", "forecaststyle", "format", "formataxis", "formatcounter",
-    "formatheaders", "formatnumbers", "formatsize", "formattip", "frequency",
-    "gradientcount", "gradientintensity", "group", "groupfirst",
-    "groupinterpolate", "groupinterpolateextend", "groupkeys", "grouplabel",
-    "groupperiod", "groups", "groupstatistic", "header", "headerstyle",
-    "heightunits", "hidden", "hide", "hidecolumn", "hideemptycolumns",
-    "hideemptyseries", "hideifempty", "horizontal", "horizontalgrid",
-    "hourformat", "icon", "iconalertexpression", "iconalertstyle", "iconcolor",
-    "iconposition", "iconsize", "id", "init", "interpolate",
-    "interpolateboundary", "interpolateextend", "interpolatefill",
-    "interpolatefunction", "interpolateperiod", "intervalformat", "is", "join",
-    "key", "keys", "keytagexpression", "label", "labelformat", "last",
-    "lastmarker", "lastvaluelabel", "layout", "leftaxis", "leftunits",
-    "legendlastvalue", "legendposition", "legendticks", "legendvalue", "limit",
-    "linearzoom", "link", "linkalertexpression", "linkalertsstyle",
-    "linkalertstyle", "linkanimate", "linkcolorrange", "linkcolors",
-    "linkdata", "linklabels", "linklabelzoomthreshold", "links",
-    "linkthresholds", "linkvalue", "linkwidthorder", "linkwidths", "load",
-    "loadfuturedata", "marker", "markerformat", "markers", "max",
-    "maxfontsize", "maximum", "maxrange", "maxrangeforce", "maxrangeright",
-    "maxrangerightforce", "maxringwidth", "maxthreshold", "menu",
-    "mergecolumns", "mergecolumnsbatchupdate", "mergefields", "methodpath",
-    "metric", "metriclabel", "min", "mincaptionsize", "minfontsize", "minimum",
-    "minorticks", "minrange", "minrangeforce", "minrangeright",
-    "minrangerightforce", "minringwidth", "minseverity", "minthreshold",
-    "mode", "moving", "movingaverage", "multiple", "multiplecolumn",
-    "multipleseries", "negative", "negativestyle", "node",
-    "nodealertexpression", "nodealertstyle", "nodecollapse", "nodecolors",
-    "nodeconnect", "nodedata", "nodelabels", "nodelabelzoomthreshold",
-    "noderadius", "noderadiuses", "nodes", "nodethresholds", "nodevalue",
-    "offset", "offsetbottom", "offsetleft", "offsetright", "offsettop",
-    "onchange", "onclick", "onseriesclick", "onseriesdoubleclick", "options",
-    "origin", "original", "padding", "palette", "paletteticks", "parent",
-    "path", "percentile", "percentilemarkers", "percentiles", "period",
-    "periods", "pinradius", "placeholders", "pointerposition", "portal",
-    "position", "primarykey", "properties", "range", "rangemerge",
-    "rangeoffset", "rangeselectend", "rangeselectstart", "rate",
-    "ratecounter", "ratio", "refresh", "refreshinterval", "reload",
-    "render", "replace", "replaceunderscore", "replacevalue", "responsive",
-    "retaintimespan", "retryrefreshinterval", "rightaxis", "ringwidth",
-    "rotatelegendticks", "rotatepaletteticks", "rotateticks", "rowalertstyle",
-    "rowstyle", "rule", "scale", "scalex", "scaley", "script", "selectormode",
-    "series", "serieslabels", "serieslimit", "seriestype", "seriesvalue",
-    "server", "serveraggregate", "severity", "severitystyle", "showtagnames",
-    "size", "sizename", "sort", "source", "stack", "start", "starttime",
-    "startworkingminutes", "statistic", "statistics", "stepline", "style",
-    "summarize", "summarizeperiod", "summarizestatistic", "svg", "table",
-    "tableheaderstyle", "tag", "tagexpression", "tagoffset", "tags",
-    "tagsdropdowns", "tagsdropdownsstyle", "tension", "threshold", "thresholds",
-    "ticks", "ticksright", "tickstime", "timeoffset", "timespan", "timezone",
-    "title", "tooltip", "topaxis", "topunits", "totalsize", "totalvalue",
-    "transpose", "type", "unscale", "update", "updateinterval",
-    "updatetimespan", "url", "urllegendticks", "urlparameters", "value",
-    "verticalgrid", "widgets", "widgetsperrow", "width", "widthunits", "zoomsvg"
-];
-
-const possibleSections: string[] = [
-    "column", "configuration", "dropdown", "group", "keys", "link", "node",
-    "option", "other", "properties", "property", "series", "tag", "tags",
-    "threshold", "widget"
-];
