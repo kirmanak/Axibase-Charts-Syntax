@@ -19,14 +19,8 @@ export default class JsDomCaller {
         return content;
     }
 
-    // amount is the number of arguments required for a function
-    private static generateCall(amount: number): string {
-        if (amount < 1) { return ""; }
-        let call = ", proxy";
-        for (let i = 1; i < amount; i++) {
-            call += ", proxy";
-        }
-        return call;
+    private static generateCall(amount: number, name: string): string {
+        return "," + Array(amount).fill(name).join();
     }
 
     private document: TextDocument;
@@ -51,17 +45,17 @@ export default class JsDomCaller {
         const window = dom.window;
         const $ = jquery(dom.window);
         this.statements.forEach((statement) => {
-            // statement.declaration = "try {" + statement.declaration + "} catch (err) { throw err; }";
             const toEvaluate = `(new Function("$", ${JSON.stringify(statement.declaration)})).call(window, ${$})`;
             try {
                 window.eval(toEvaluate);
             } catch (err) {
                 let isImported = false;
-                statement.imports.forEach((imported) => {
-                    if (imported.length !== 0 && new RegExp(imported, "i").test(err.message)) {
+                for (const imported of statement.imports) {
+                    if (new RegExp(imported, "i").test(err.message)) {
                         isImported = true;
+                        break;
                     }
-                });
+                }
                 if (!isImported) {
                     this.result.push(Util.createDiagnostic(
                         { range: statement.range, uri: this.document.uri },
@@ -161,7 +155,7 @@ export default class JsDomCaller {
                 `const proxy = new Proxy({}, {});` +
                 `const proxyFunction = new Proxy(new Function(), {});` +
                 `(new Function("widget","config","dialog", ${content}))` +
-                `.call(window, proxyFunction, proxy, proxy)`,
+                `.call(window${JsDomCaller.generateCall(1, "proxyFunction")}${JsDomCaller.generateCall(2, "proxy")})`,
             imports: this.imports, range,
         };
         this.statements.push(statement);
@@ -174,7 +168,7 @@ export default class JsDomCaller {
         const statement = {
             declaration:
                 `(new Function("value","time","previousValue","previousTime", ${content}))\n` +
-                `.call(window, 5, 5, 5, 5)`,
+                `.call(window${JsDomCaller.generateCall(4, "5")})`,
             imports: this.imports,
             range: {
                 end: { character: matchStart + this.match[2].length, line: this.currentLineNumber },
@@ -186,10 +180,8 @@ export default class JsDomCaller {
 
     private processValue() {
         const content = JsDomCaller.stringifyStatement(this.match[2]);
-        const call = JsDomCaller.generateCall(this.importCounter);
         const matchStart = this.match.index + this.match[1].length;
-        let importList = "";
-        this.imports.forEach((imported) => importList += `"${imported}", `);
+        const importList = this.imports.join();
         const statement = {
             declaration:
                 `const proxy = new Proxy({}, {});` +
@@ -202,13 +194,11 @@ export default class JsDomCaller {
                 `"threshold_duration","time","bottom","top","meta","entityTag","metricTag","median",` +
                 `"average","minimum","maximum","series","getValueWithOffset","getValueForDate",` +
                 `"getMaximumValue", ${importList} ${content}` +
-                `)).call(window, proxy, proxy, proxy, proxyFunction, proxyFunction, proxyFunction,` +
-                `proxyFunction, proxyFunction, proxyFunction, proxyFunction, proxyFunction, proxyFunction,` +
-                `proxyFunction, proxyFunction, proxyFunction, proxyFunction, proxyFunction, proxyFunction,` +
-                `proxyFunction, proxyFunction, proxyFunction, proxyFunction, proxyFunction, proxyFunction,` +
-                `proxyFunction, proxyFunction, proxyFunction, proxyFunction, proxyFunction, proxyFunction,` +
-                `proxyFunction, proxyFunction, proxyFunction, proxyFunction, proxyFunction, proxyFunction,` +
-                `proxyArray, proxyFunction, proxyFunction, proxyFunction${call})`,
+                `)).call(window${JsDomCaller.generateCall(4, "proxy")}` +
+                `${JsDomCaller.generateCall(33, "proxyFunction")}` +
+                `${JsDomCaller.generateCall(1, "proxyArray")}` +
+                `${JsDomCaller.generateCall(3, "proxyFunction")}` +
+                `${JsDomCaller.generateCall(this.importCounter, "proxy")})`,
             imports: this.imports,
             range: {
                 end: { character: matchStart + this.match[2].length, line: this.currentLineNumber },
@@ -228,8 +218,7 @@ export default class JsDomCaller {
                 `(new Function("requestMetricsSeriesValues","requestEntitiesMetricsValues",` +
                 `"requestPropertiesValues","requestMetricsSeriesOptions","requestEntitiesMetricsOptions",` +
                 `"requestPropertiesOptions", ${content}` +
-                `)).call(window, proxyFunction, proxyFunction, proxyFunction, proxyFunction,` +
-                ` proxyFunction, proxyFunction)`,
+                `)).call(window${JsDomCaller.generateCall(6, "proxyFunction")})`,
             imports: this.imports,
             range: {
                 end: { character: matchStart + this.match[2].length, line: this.currentLineNumber },
