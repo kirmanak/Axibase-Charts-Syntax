@@ -14,9 +14,26 @@ export default class FoundKeyword {
         };
     }
 
+    public static isCloseAble(line: string): boolean {
+        return /^[ \t]*(?:for|if|list|var|script|csv)\b/.test(line);
+    }
+
+    public static isClosing(line: string): boolean {
+        return /^[ \t]*(?:end(?:for|if|list|var|script|csv)|elseif|else)\b/.test(line);
+    }
+
+    public static isIncreasingIndent(line: string): boolean {
+        return /^[ \t]*(?:for|if|else|elseif|script|csv|var|list)\b/.test(line);
+    }
+
+    public static isNotCloseAble(line: string): boolean {
+        return /^[ \t]*else(?:if)?\b/.test(line);
+    }
+
     private static regexp =
-    /^([ \t]*)(endvar|endcsv|endfor|elseif|endif|endscript|endlist|script|else|if|list|for|csv|var)\b/i;
+        /^([ \t]*)(endvar|endcsv|endfor|elseif|endif|endscript|endlist|script|else|if|list|for|csv|var)\b/i;
 
     public keyword: string;
     public range: Range;
+
 }
