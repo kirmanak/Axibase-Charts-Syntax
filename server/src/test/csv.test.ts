@@ -1,84 +1,89 @@
-import { DiagnosticSeverity } from "vscode-languageserver/lib/main";
-import Util from "../Util";
-import Test from "./Test";
+import { DiagnosticSeverity } from "vscode-languageserver";
+import { createDiagnostic } from "../util";
+import { Test } from "./test";
 
 suite("CSV tests", () => {
-    const tests = [
+    const tests: Test[] = [
         new Test(
             "Correct inline csv(header next line)",
-            "csv countries = \n" +
-            "   name, value1, value2\n" +
-            "   Russia, 65, 63\n" +
-            "   USA, 63, 63\n" +
-            "endcsv",
+            `csv countries =
+   name, value1, value2
+   Russia, 65, 63
+   USA, 63, 63
+endcsv`,
             [],
         ),
         new Test(
             "Correct inline csv (header this line)",
-            "csv countries = name, value1, value2\n" +
-            "   Russia, 65, 63\n" +
-            "   USA, 63, 63\n" +
-            "endcsv",
+            `csv countries = name, value1, value2
+   Russia, 65, 63
+   USA, 63, 63
+endcsv`,
             [],
         ),
         new Test(
             "Unclosed csv (header this line)",
-            "csv countries = name, value1, value2\n" +
-            "   Russia, 65, 63\n" +
-            "   USA, 63, 63\n" +
-            "encsv",
-            [Util.createDiagnostic(
-                {
-                    range: {
-                        end: { character: 5, line: 3 },
-                        start: { character: 0, line: 3 },
+            `csv countries = name, value1, value2
+   Russia, 65, 63
+   USA, 63, 63
+encsv`,
+            [
+                createDiagnostic(
+                    {
+                        range: {
+                            end: { character: 5, line: 3 },
+                            start: { character: 0, line: 3 },
+                        },
+                        uri: Test.URI,
                     },
-                    uri: Test.URI,
-                },
-                DiagnosticSeverity.Error, "Expected 3 columns, but found 1",
-            ), Util.createDiagnostic(
-                {
-                    range: {
-                        end: { character: 3, line: 0 }, start: { character: 0, line: 0 },
-                    }, uri: Test.URI,
-                },
-                DiagnosticSeverity.Error, "csv has no matching endcsv",
-            )],
+                    DiagnosticSeverity.Error, "Expected 3 columns, but found 1",
+                ),
+                createDiagnostic(
+                    {
+                        range: {
+                            end: { character: 3, line: 0 }, start: { character: 0, line: 0 },
+                        },
+                        uri: Test.URI,
+                    },
+                    DiagnosticSeverity.Error, "csv has no matching endcsv",
+                )],
         ),
         new Test(
             "Unclosed csv (header next line)",
-            "csv countries = \n" +
-            "   name, value1, value2\n" +
-            "   Russia, 65, 63\n" +
-            "   USA, 63, 63\n" +
-            "encsv",
-            [Util.createDiagnostic(
-                {
-                    range: {
-                        end: { character: 5, line: 4 },
-                        start: { character: 0, line: 4 },
+            `csv countries =
+   name, value1, value2
+   Russia, 65, 63
+   USA, 63, 63
+encsv`,
+            [
+                createDiagnostic(
+                    {
+                        range: {
+                            end: { character: 5, line: 4 },
+                            start: { character: 0, line: 4 },
+                        },
+                        uri: Test.URI,
                     },
-                    uri: Test.URI,
-                },
-                DiagnosticSeverity.Error, "Expected 3 columns, but found 1",
-            ), Util.createDiagnostic(
-                {
-                    range: {
-                        end: { character: 3, line: 0 },
-                        start: { character: 0, line: 0 },
+                    DiagnosticSeverity.Error, "Expected 3 columns, but found 1",
+                ),
+                createDiagnostic(
+                    {
+                        range: {
+                            end: { character: 3, line: 0 },
+                            start: { character: 0, line: 0 },
+                        },
+                        uri: Test.URI,
                     },
-                    uri: Test.URI,
-                },
-                DiagnosticSeverity.Error, "csv has no matching endcsv",
-            )],
+                    DiagnosticSeverity.Error, "csv has no matching endcsv",
+                )],
         ),
         new Test(
             "Incorrect csv",
-            "csv countries = name, value1, value2\n" +
-            "   Russia, 65, 63\n" +
-            "   USA, 63, 63, 63\n" +
-            "endcsv",
-            [Util.createDiagnostic(
+            `csv countries = name, value1, value2
+   Russia, 65, 63
+   USA, 63, 63, 63
+endcsv`,
+            [createDiagnostic(
                 {
                     range: {
                         end: { character: 18, line: 2 },
@@ -91,14 +96,14 @@ suite("CSV tests", () => {
         ),
         new Test(
             "Correct csv with escaped whitespaces and commas",
-            "csv countries = name, value1, value2\n" +
-            '   Russia, "6,5", 63\n' +
-            '   USA, 63, "6 3"\n' +
-            "endcsv",
+            `csv countries = name, value1, value2
+   Russia, "6,5", 63
+   USA, 63, "6 3"
+endcsv`,
             [],
         ),
     ];
 
-    tests.forEach(Test.VALIDATION_TEST);
+    tests.forEach((test: Test) => { test.validationTest(); });
 
 });
