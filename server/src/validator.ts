@@ -217,13 +217,13 @@ export class Validator {
 
         if (this.areWeIn("if")) {
             let array: string[] = this.ifSettings.get(this.lastCondition);
-            array = this.addToArray(array, DiagnosticSeverity.Warning);
+            array = this.addToArray(array, DiagnosticSeverity.Error);
             this.ifSettings.set(this.lastCondition, array);
             if (isInArray(this.settings, setting)) {
                 // The setting was defined before if
-                this.result.push(createDiagnostic(location, DiagnosticSeverity.Warning, message));
+                this.result.push(createDiagnostic(location, DiagnosticSeverity.Error, message));
             }
-        } else { this.addToArray(this.settings, DiagnosticSeverity.Warning); }
+        } else { this.addToArray(this.settings, DiagnosticSeverity.Error); }
 
         if (this.currentSection && isInMap(this.currentSection.keyword, resources.parentSections)) {
             if (isInMap(setting, resources.requiredSectionSettingsMap)) {
@@ -320,7 +320,7 @@ export class Validator {
         this.match = /(^\s*for\s+)(\w+)\s+in/m.exec(line);
         if (this.match) {
             const matching: RegExpExecArray = this.match;
-            this.match = /^(\s*for\s+\w+\s+in\s+)(\w+)\s*$/m.exec(line);
+            this.match = /^(\s*for\s+\w+\s+in\s+)(\w+)/m.exec(line);
             if (this.match) {
                 const variable: string = this.match[Validator.CONTENT_POSITION];
                 if (!isInMap(variable, this.variables)) {
@@ -447,7 +447,7 @@ export class Validator {
                 this.requiredSettings.push(["table"]);
             }
 
-            if (setting !== "onseriesclick") {
+            if (!isInArray(resources.repeatAble, setting)) {
                 this.checkRepetition();
             }
 
@@ -479,7 +479,9 @@ export class Validator {
                         },
                         uri: this.textDocument.uri,
                     },
-                    DiagnosticSeverity.Information, `${this.match[Validator.CONTENT_POSITION]} is interpreted as a tag`,
+                    DiagnosticSeverity.Information, `${this.match[Validator.CONTENT_POSITION]} is interpreted as a` +
+                    " series tag and is sent to the server. Remove the setting from the [tags] section or enclose it" +
+                    " double-quotes to suppress the warning.",
                 ));
             }
         }
@@ -496,13 +498,14 @@ export class Validator {
         const line: string = this.getCurrentLine();
 
         /* statements like `[section] variable = value` aren't supported */
-        if (!this.match) { this.match = /^(['" \t]*)([-\w]+)['" \t]*=/gm.exec(line); }
+        if (!this.match) { this.match = /^(['" \t]*)([-\w]+)['" \t]*=/m.exec(line); }
         if (this.match) {
             const indent: number = this.match[1].length;
             const word: string = this.match[Validator.CONTENT_POSITION];
             const cleared: string = word.replace(/[^a-z]/g, "");
             let dictionary: string[] = resources.possibleOptions;
-            if (this.match[0].endsWith("]")) {
+            const trimmed: string = this.match[0].trim();
+            if (trimmed.endsWith("]")) {
                 dictionary = resources.possibleSections;
             } else if (cleared.startsWith("column")) {
                 return;
