@@ -218,16 +218,12 @@ export class Validator {
 
     private checkRepetition(): void {
         const setting: string = this.match[Validator.CONTENT_POSITION].replace(/[^a-z]/g, "");
-        const location: Location = {
-            range: {
-                end: {
-                    character: this.match[1].length + this.match[Validator.CONTENT_POSITION].length,
-                    line: this.currentLineNumber,
-                },
-                start: { character: this.match[1].length, line: this.currentLineNumber },
-            },
-            uri: this.textDocument.uri,
-        };
+        const location: Location = Location.create(
+            this.textDocument.uri, Range.create(
+                this.currentLineNumber, this.match[1].length,
+                this.currentLineNumber, this.match[1].length + this.match[Validator.CONTENT_POSITION].length,
+            ),
+        );
         const message: string = `${this.match[Validator.CONTENT_POSITION]} is already defined`;
 
         if (this.areWeIn("if")) {
@@ -336,33 +332,32 @@ export class Validator {
         this.match = /(^\s*for\s+)(\w+)\s+in/m.exec(line);
         if (this.match) {
             const matching: RegExpExecArray = this.match;
-            this.match = /^(\s*for\s+\w+\s+in\s+)(\w+)/m.exec(line);
+            this.match = /^(\s*for\s+\w+\s+in\s+)(?:Object\.keys\((\w+)\)|(\w+))/im.exec(line);
             if (this.match) {
-                const variable: string = this.match[Validator.CONTENT_POSITION];
+                let position: number = Validator.CONTENT_POSITION;
+                const location: Location = Location.create(
+                    this.textDocument.uri, Range.create(
+                        this.currentLineNumber, this.match[1].length,
+                        this.currentLineNumber, this.match[1].length,
+                    ),
+                );
+                if (this.match[position]) {
+                    location.range.start.character += "Object.keys(".length;
+                    location.range.end.character += "Object.keys(".length;
+                } else {
+                    position++;
+                }
+                const variable: string = this.match[position];
+                location.range.end.character += variable.length;
                 if (!isInMap(variable, this.variables)) {
                     const message: string = suggestionMessage(variable, mapToArray(this.variables));
-                    this.result.push(createDiagnostic(
-                        {
-                            range: {
-                                end: {
-                                    character: this.match[1].length + variable.length,
-                                    line: this.currentLineNumber,
-                                },
-                                start: {
-                                    character: this.match[1].length,
-                                    line: this.currentLineNumber,
-                                },
-                            },
-                            uri: this.textDocument.uri,
-                        },
-                        DiagnosticSeverity.Error, message,
-                    ));
+                    this.result.push(createDiagnostic(location, DiagnosticSeverity.Error, message));
                 }
             } else {
                 this.result.push(createDiagnostic(
                     {
                         range: {
-                            end: { character: matching[0].length + "or".length, line: this.currentLineNumber },
+                            end: { character: matching[0].length + "  ".length, line: this.currentLineNumber },
                             start: { character: matching[0].length + 1, line: this.currentLineNumber },
                         },
                         uri: this.textDocument.uri,
