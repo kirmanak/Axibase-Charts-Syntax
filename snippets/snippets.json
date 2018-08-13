@@ -13,14 +13,20 @@
         ],
         "description": "Initial configuration"
     },
-    "If condition": {
-        "prefix": "if",
+    "csv": {
+        "prefix": "csv",
         "body": [
-            "\nif ${1:condition}",
-            "  ${0}",
-            "endif"
+            "csv ${1:cities} = ${2:name, region}",
+            "  ${3:Sunnyvale, CA}",
+            "  ${4:Cupertino, CA}",
+            "endcsv",
+            "",
+            "for ${5:city} in ${1:cities}",
+            "  entity = ${6:@{city.name}}",
+            "endfor",
+            "${0}"
         ],
-        "description": "If condition"
+        "description": "Csv and corresponding for"
     },
     "chart-basic": {
         "prefix": "chart-basic",
