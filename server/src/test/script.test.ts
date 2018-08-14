@@ -1,4 +1,4 @@
-import { DiagnosticSeverity } from "vscode-languageserver";
+import { DiagnosticSeverity, Position, Range } from "vscode-languageserver";
 import { createDiagnostic } from "../util";
 import { Test } from "./test";
 
@@ -17,13 +17,7 @@ endscript`,
             `script
 endscrpt`,
             [createDiagnostic(
-                {
-                    range: {
-                        end: { character: 6, line: 0 },
-                        start: { character: 0, line: 0 },
-                    },
-                    uri: Test.URI,
-                },
+                Range.create(Position.create(0, 0), Position.create(0, "script".length)),
                 DiagnosticSeverity.Error, errorMessage,
             )],
         ),
@@ -51,13 +45,7 @@ endscrpt
 script
 endscrpt`,
             [createDiagnostic(
-                {
-                    range: {
-                        end: { character: 6, line: 0 },
-                        start: { character: 0, line: 0 },
-                    },
-                    uri: Test.URI,
-                },
+                Range.create(Position.create(0, 0), Position.create(0, "script".length)),
                 DiagnosticSeverity.Error, errorMessage,
             )],
         ),
@@ -79,13 +67,7 @@ endscript`,
             "Unfinished one-line script = ",
             "script = ",
             [createDiagnostic(
-                {
-                    range: {
-                        end: { character: 6, line: 0 },
-                        start: { character: 0, line: 0 },
-                    },
-                    uri: Test.URI,
-                },
+                Range.create(Position.create(0, 0), Position.create(0, "script".length)),
                 DiagnosticSeverity.Error, errorMessage,
             )],
         ),

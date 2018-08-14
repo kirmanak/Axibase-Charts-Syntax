@@ -1,3 +1,5 @@
+/* tslint:disable:no-magic-numbers */
+import { FormattingOptions, Position, Range, TextEdit } from "vscode-languageserver";
 import { Test } from "./test";
 
 suite("Formatting indents tests", () => {
@@ -7,27 +9,15 @@ suite("Formatting indents tests", () => {
             `[configuration]
   width-units = 200
   height-units = 200`,
-            [],
-            {
-                options: { insertSpaces: true, tabSize: 2 },
-                textDocument: { uri: Test.URI },
-            },
+            [], FormattingOptions.create(2, true),
         ),
         new Test(
             "incorrect cfg section",
             `[configuration]
 width-units = 200
   height-units = 200`,
-            [{
-                newText: "  ", range: {
-                    end: { character: 0, line: 1 },
-                    start: { character: 0, line: 1 },
-                },
-            }],
-            {
-                options: { insertSpaces: true, tabSize: 2 },
-                textDocument: { uri: Test.URI },
-            },
+            [TextEdit.replace(Range.create(Position.create(1, 0), Position.create(1, 0)), "  ")],
+            FormattingOptions.create(2, true),
         ),
         new Test(
             "correct nested wgt section",
@@ -36,11 +26,7 @@ width-units = 200
   height-units = 200
   [widget]
     type = chart`,
-            [],
-            {
-                options: { insertSpaces: true, tabSize: 2 },
-                textDocument: { uri: Test.URI },
-            },
+            [], FormattingOptions.create(2, true),
         ),
         new Test(
             "incorrect nested wgt section",
@@ -49,16 +35,8 @@ width-units = 200
   height-units = 200
   [widget]
   type = chart`,
-            [{
-                newText: "    ", range: {
-                    end: { character: 2, line: 4 },
-                    start: { character: 0, line: 4 },
-                },
-            }],
-            {
-                options: { insertSpaces: true, tabSize: 2 },
-                textDocument: { uri: Test.URI },
-            },
+            [TextEdit.replace(Range.create(Position.create(4, 0), Position.create(4, 2)), "    ")],
+            FormattingOptions.create(2, true),
         ),
         new Test(
             "correct nested series section",
@@ -69,11 +47,7 @@ width-units = 200
     type = chart
     [series]
       entity = server`,
-            [],
-            {
-                options: { insertSpaces: true, tabSize: 2 },
-                textDocument: { uri: Test.URI },
-            },
+            [], FormattingOptions.create(2, true),
         ),
         new Test(
             "incorrect nested series section",
@@ -84,16 +58,8 @@ width-units = 200
     type = chart
   [series]
       entity = server`,
-            [{
-                newText: "    ", range: {
-                    end: { character: 2, line: 5 },
-                    start: { character: 0, line: 5 },
-                },
-            }],
-            {
-                options: { insertSpaces: true, tabSize: 2 },
-                textDocument: { uri: Test.URI },
-            },
+            [TextEdit.replace(Range.create(Position.create(5, 0), Position.create(5, 2)), "    ")],
+            FormattingOptions.create(2, true),
         ),
         new Test(
             "Correct for loop",
@@ -106,11 +72,7 @@ width-units = 200
     [series]
       entity = @{server}
     endfor`,
-            [],
-            {
-                options: { insertSpaces: true, tabSize: 2 },
-                textDocument: { uri: Test.URI },
-            },
+            [], FormattingOptions.create(2, true),
         ),
         new Test(
             "Incorrect for loop",
@@ -123,16 +85,8 @@ width-units = 200
       [series]
       entity = @{server}
     endfor`,
-            [{
-                newText: "    ", range: {
-                    end: { character: "      ".length, line: 6 },
-                    start: { character: 0, line: 6 },
-                },
-            }],
-            {
-                options: { insertSpaces: true, tabSize: 2 },
-                textDocument: { uri: Test.URI },
-            },
+            [TextEdit.replace(Range.create(Position.create(6, 0), Position.create(6, "      ".length)), "    ")],
+            FormattingOptions.create(2, true),
         ),
         new Test(
             "Incorrect nested if in for",
@@ -151,28 +105,11 @@ for item in servers
     endif
 endfor`,
             [
-                {
-                    newText: "  ", range: {
-                        end: { character: "    ".length, line: 8 },
-                        start: { character: 0, line: 8 },
-                    },
-                },
-                {
-                    newText: "  ", range: {
-                        end: { character: "    ".length, line: 10 },
-                        start: { character: 0, line: 10 },
-                    },
-                },
-                {
-                    newText: "  ", range: {
-                        end: { character: "    ".length, line: 12 },
-                        start: { character: 0, line: 12 },
-                    },
-                }],
-            {
-                options: { insertSpaces: true, tabSize: 2 },
-                textDocument: { uri: Test.URI },
-            },
+                TextEdit.replace(Range.create(Position.create(8, 0), Position.create(8, "    ".length)), "  "),
+                TextEdit.replace(Range.create(Position.create(10, 0), Position.create(10, "    ".length)), "  "),
+                TextEdit.replace(Range.create(Position.create(12, 0), Position.create(12, "    ".length)), "  "),
+            ],
+            FormattingOptions.create(2, true),
         ),
         new Test(
             "Incorrect formatting in the first for, correct in second",
@@ -202,22 +139,10 @@ endfor`,
     endif
   endfor`,
             [
-                {
-                    newText: "  ", range: {
-                        end: { character: 0, line: 9 },
-                        start: { character: 0, line: 9 },
-                    },
-                },
-                {
-                    newText: "  ", range: {
-                        end: { character: 0, line: 12 },
-                        start: { character: 0, line: 12 },
-                    },
-                }],
-            {
-                options: { insertSpaces: true, tabSize: 2 },
-                textDocument: { uri: Test.URI },
-            },
+                TextEdit.replace(Range.create(Position.create(9, 0), Position.create(9, 0)), "  "),
+                TextEdit.replace(Range.create(Position.create(12, 0), Position.create(12, 0)), "  "),
+            ],
+            FormattingOptions.create(2, true),
         ),
         new Test(
             "A couple of correct groups",
@@ -243,11 +168,7 @@ endfor`,
     [series]
       entity = vds
       metric = cpu_busy`,
-            [],
-            {
-                options: { insertSpaces: true, tabSize: 2 },
-                textDocument: { uri: Test.URI },
-            },
+            [], FormattingOptions.create(2, true),
         ),
         new Test(
             "Correct for after var declaration",
@@ -261,11 +182,7 @@ endfor`,
     entity = @{item}
     metric = cpu_busy
   endfor`,
-            [],
-            {
-                options: { insertSpaces: true, tabSize: 2 },
-                textDocument: { uri: Test.URI },
-            },
+            [], FormattingOptions.create(2, true),
         ),
     ];
 

@@ -1,5 +1,5 @@
-import { DocumentFormattingParams, TextDocument, TextEdit } from "vscode-languageserver";
-import { FoundKeyword } from "./foundKeyword";
+import { FormattingOptions, Range, TextEdit } from "vscode-languageserver";
+import { TextRange } from "./textRange";
 
 export class Formatter {
     private static readonly CONTENT_POSITION: number = 2;
@@ -12,14 +12,13 @@ export class Formatter {
     private lastLineNumber: number;
     private readonly lines: string[];
     private match: RegExpExecArray;
-    private readonly params: DocumentFormattingParams;
+    private readonly options: FormattingOptions;
     private previous: string;
 
-    public constructor(document: TextDocument, formattingParams: DocumentFormattingParams) {
-        if (!document || !formattingParams) { throw new Error("Invalid arguments"); }
-        this.params = formattingParams;
-        this.lines = document.getText()
-            .split("\n");
+    public constructor(text: string, formattingOptions: FormattingOptions) {
+        if (!text || !formattingOptions) { throw new Error("Invalid arguments"); }
+        this.options = formattingOptions;
+        this.lines = text.split("\n");
     }
 
     public lineByLine(): TextEdit[] {
@@ -33,20 +32,20 @@ export class Formatter {
                 }
                 continue;
             }
-            if (FoundKeyword.isClosing(line)) {
+            if (TextRange.isClosing(line)) {
                 const stackHead: string = this.keywordsLevels.pop();
                 if (stackHead !== undefined) {
                     this.setIndent(stackHead);
-                    if (FoundKeyword.isNotCloseAble(line)) { this.keywordsLevels.push(stackHead); }
+                    if (TextRange.isNotCloseAble(line)) { this.keywordsLevels.push(stackHead); }
                 }
             }
             this.checkIndent();
             if (this.shouldBeClosed()) {
-                if (FoundKeyword.isCloseAble(line)) {
+                if (TextRange.isCloseAble(line)) {
                     this.current = undefined;
                     this.keywordsLevels.push(this.currentIndent);
                 }
-                if (FoundKeyword.isIncreasingIndent(line)) { this.increaseIndent(); }
+                if (TextRange.isIncreasingIndent(line)) { this.increaseIndent(); }
             }
         }
 
@@ -72,21 +71,18 @@ export class Formatter {
     private checkIndent(): void {
         this.match = /(^\s*)\S/.exec(this.getCurrentLine());
         if (this.match[1] !== this.currentIndent) {
-            this.edits.push({
-                newText: this.currentIndent,
-                range: {
-                    end: { character: (this.match[1]) ? this.match[1].length : 0, line: this.currentLine },
-                    start: { character: 0, line: this.currentLine },
-                },
-            });
+            this.edits.push(TextEdit.replace(
+                Range.create(this.currentLine, 0, this.currentLine, (this.match[1]) ? this.match[1].length : 0),
+                this.currentIndent,
+            ));
         }
     }
 
     private decreaseIndent(): void {
         if (this.currentIndent.length === 0) { return; }
         let newLength: number = this.currentIndent.length;
-        if (this.params.options.insertSpaces) {
-            newLength -= this.params.options.tabSize;
+        if (this.options.insertSpaces) {
+            newLength -= this.options.tabSize;
         } else {
             newLength--;
         }
@@ -110,8 +106,8 @@ export class Formatter {
 
     private increaseIndent(): void {
         let addition: string = "\t";
-        if (this.params.options.insertSpaces) {
-            addition = Array(this.params.options.tabSize)
+        if (this.options.insertSpaces) {
+            addition = Array(this.options.tabSize)
                 .fill(" ")
                 .join("");
         }
@@ -148,13 +144,9 @@ export class Formatter {
     private removeExtraSpaces(line: string): void {
         const match: RegExpExecArray = /(\s+)$/.exec(line);
         if (match) {
-            this.edits.push({
-                newText: "",
-                range: {
-                    end: { character: line.length, line: this.currentLine },
-                    start: { character: line.length - match[1].length, line: this.currentLine },
-                },
-            });
+            this.edits.push(TextEdit.replace(
+                Range.create(this.currentLine, line.length - match[1].length, this.currentLine, line.length), "",
+            ));
         }
     }
 

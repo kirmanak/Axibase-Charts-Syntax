@@ -1,6 +1,6 @@
-import { Diagnostic, DiagnosticSeverity, Location, Range, TextDocument } from "vscode-languageserver";
-import { FoundKeyword } from "./foundKeyword";
+import { Diagnostic, DiagnosticSeverity, Position, Range } from "vscode-languageserver";
 import * as resources from "./resources";
+import { TextRange } from "./textRange";
 import {
     countCsvColumns, createDiagnostic, deleteComments, isAnyInArray, isInArray, isInMap, mapToArray, suggestionMessage,
 } from "./util";
@@ -10,27 +10,25 @@ export class Validator {
     private aliases: string[] = [];
     private csvColumns: number;
     private currentLineNumber: number = 0;
-    private currentSection: FoundKeyword;
-    private readonly deAliases: FoundKeyword[] = [];
-    private foundKeyword: FoundKeyword;
+    private currentSection: TextRange;
+    private readonly deAliases: TextRange[] = [];
+    private foundKeyword: TextRange;
     private readonly ifSettings: Map<string, string[]> = new Map<string, string[]>();
-    private readonly keywordsStack: FoundKeyword[] = [];
+    private readonly keywordsStack: TextRange[] = [];
     private lastCondition: string;
     private readonly lines: string[];
     private match: RegExpExecArray;
     private readonly parentSettings: Map<string, string[]> = new Map<string, string[]>();
-    private previousSection: FoundKeyword;
+    private previousSection: TextRange;
     private previousSettings: string[] = [];
     private requiredSettings: string[][] = [];
     private readonly result: Diagnostic[] = [];
     private settings: string[] = [];
-    private readonly textDocument: TextDocument;
     private urlParameters: string[];
     private readonly variables: Map<string, string[]> = new Map<string, string[]>();
 
-    public constructor(textDocument: TextDocument) {
-        this.textDocument = textDocument;
-        this.lines = deleteComments(textDocument.getText())
+    public constructor(text: string) {
+        this.lines = deleteComments(text)
             .split("\n");
     }
 
@@ -39,18 +37,19 @@ export class Validator {
             const line: string = this.getCurrentLine();
 
             // Prepare regex to let 'g' key do its work
-            this.foundKeyword = FoundKeyword.parse(line, this.currentLineNumber);
+            this.foundKeyword = TextRange.parse(line, this.currentLineNumber);
 
-            if (this.areWeIn("script") && (!this.foundKeyword || this.foundKeyword.keyword !== "endscript")) {
+            if (this.areWeIn("script") && (!this.foundKeyword || this.foundKeyword.text !== "endscript")) {
                 continue;
-            } else if (this.areWeIn("csv") && (!this.foundKeyword || this.foundKeyword.keyword !== "endcsv")) {
+            }
+            if (this.areWeIn("csv") && (!this.foundKeyword || this.foundKeyword.text !== "endcsv")) {
                 this.validateCsv();
             }
 
             this.eachLine();
 
             if (this.foundKeyword) {
-                if (/\b(if|for|csv)\b/i.test(this.foundKeyword.keyword)) {
+                if (/\b(if|for|csv)\b/i.test(this.foundKeyword.text)) {
                     this.keywordsStack.push(this.foundKeyword);
                 }
 
@@ -71,16 +70,10 @@ export class Validator {
         const variable: string = this.match[Validator.CONTENT_POSITION];
         if (isInArray(array, variable)) {
             this.result.push(createDiagnostic(
-                {
-                    range: {
-                        end: {
-                            character: this.match[1].length + variable.length,
-                            line: this.currentLineNumber,
-                        },
-                        start: { character: this.match[1].length, line: this.currentLineNumber },
-                    },
-                    uri: this.textDocument.uri,
-                },
+                Range.create(
+                    Position.create(this.currentLineNumber, this.match[1].length),
+                    Position.create(this.currentLineNumber, this.match[1].length + variable.length),
+                ),
                 severity, `${variable} is already defined`,
             ));
         } else {
@@ -97,13 +90,10 @@ export class Validator {
         if (isInMap(variable, map)) {
             const startPosition: number = this.match.index + this.match[1].length;
             this.result.push(createDiagnostic(
-                {
-                    range: {
-                        end: { character: startPosition + variable.length, line: this.currentLineNumber },
-                        start: { character: startPosition, line: this.currentLineNumber },
-                    },
-                    uri: this.textDocument.uri,
-                },
+                Range.create(
+                    Position.create(this.currentLineNumber, startPosition),
+                    Position.create(this.currentLineNumber, startPosition + variable.length),
+                ),
                 severity, `${variable} is already defined`,
             ));
         } else {
@@ -117,17 +107,14 @@ export class Validator {
     }
 
     private areWeIn(name: string): boolean {
-        return this.keywordsStack.find((item: FoundKeyword) => (item) ? item.keyword === name : false) !== undefined;
+        return this.keywordsStack.find((item: TextRange) => (item) ? item.text === name : false) !== undefined;
     }
 
     private checkAliases(): void {
-        this.deAliases.forEach((deAlias: FoundKeyword) => {
-            if (!isInArray(this.aliases, deAlias.keyword)) {
-                const message: string = suggestionMessage(deAlias.keyword, this.aliases);
-                this.result.push(createDiagnostic(
-                    { range: deAlias.range, uri: this.textDocument.uri },
-                    DiagnosticSeverity.Error, message,
-                ));
+        this.deAliases.forEach((deAlias: TextRange) => {
+            if (!isInArray(this.aliases, deAlias.text)) {
+                const message: string = suggestionMessage(deAlias.text, this.aliases);
+                this.result.push(createDiagnostic(deAlias.range, DiagnosticSeverity.Error, message));
             }
         });
     }
@@ -142,15 +129,15 @@ export class Validator {
         }
         if (!this.areWeIn(expectedEnd)) {
             this.result.push(createDiagnostic(
-                { range: this.foundKeyword.range, uri: this.textDocument.uri }, DiagnosticSeverity.Error,
-                `${this.foundKeyword.keyword} has no matching ${expectedEnd}`,
+                this.foundKeyword.range, DiagnosticSeverity.Error,
+                `${this.foundKeyword.text} has no matching ${expectedEnd}`,
             ));
         } else {
             const index: number =
-                this.keywordsStack.findIndex((keyword: FoundKeyword) => keyword.keyword === expectedEnd);
+                this.keywordsStack.findIndex((keyword: TextRange) => keyword.text === expectedEnd);
             this.keywordsStack.splice(index, 1);
             this.result.push(createDiagnostic(
-                { range: this.foundKeyword.range, uri: this.textDocument.uri }, DiagnosticSeverity.Error,
+                this.foundKeyword.range, DiagnosticSeverity.Error,
                 `${expectedEnd} has finished before ${lastKeyword}`,
             ));
         }
@@ -174,7 +161,7 @@ export class Validator {
     private checkPreviousSection(): void {
         if (!this.currentSection) { return; }
         this.requiredSettings =
-            this.requiredSettings.concat(resources.requiredSectionSettingsMap.get(this.currentSection.keyword));
+            this.requiredSettings.concat(resources.requiredSectionSettingsMap.get(this.currentSection.text));
         if (this.requiredSettings.length !== 0) {
             const notFound: string[] = [];
             this.requiredSettings.forEach((options: string[]) => {
@@ -208,8 +195,7 @@ export class Validator {
             });
             notFound.forEach((option: string) => {
                 this.result.push(createDiagnostic(
-                    { range: this.currentSection.range, uri: this.textDocument.uri },
-                    DiagnosticSeverity.Error, `${option} is required`,
+                    this.currentSection.range, DiagnosticSeverity.Error, `${option} is required`,
                 ));
             });
         }
@@ -218,11 +204,9 @@ export class Validator {
 
     private checkRepetition(): void {
         const setting: string = this.match[Validator.CONTENT_POSITION].replace(/[^a-z]/g, "");
-        const location: Location = Location.create(
-            this.textDocument.uri, Range.create(
-                this.currentLineNumber, this.match[1].length,
-                this.currentLineNumber, this.match[1].length + this.match[Validator.CONTENT_POSITION].length,
-            ),
+        const location: Range = Range.create(
+            this.currentLineNumber, this.match[1].length,
+            this.currentLineNumber, this.match[1].length + this.match[Validator.CONTENT_POSITION].length,
         );
         const message: string = `${this.match[Validator.CONTENT_POSITION]} is already defined`;
 
@@ -236,9 +220,9 @@ export class Validator {
             }
         } else { this.addToArray(this.settings, DiagnosticSeverity.Error); }
 
-        if (this.currentSection && isInMap(this.currentSection.keyword, resources.parentSections)) {
+        if (this.currentSection && isInMap(this.currentSection.text, resources.parentSections)) {
             if (isInMap(setting, resources.requiredSectionSettingsMap)) {
-                this.addToMap(this.parentSettings, this.currentSection.keyword, DiagnosticSeverity.Hint);
+                this.addToMap(this.parentSettings, this.currentSection.text, DiagnosticSeverity.Hint);
             }
         } else {
             if (isInMap(setting, this.parentSettings)) {
@@ -251,11 +235,11 @@ export class Validator {
     private diagnosticForLeftKeywords(): void {
         const length: number = this.keywordsStack.length;
         for (let i: number = 0; i < length; i++) {
-            const nestedConstruction: FoundKeyword = this.keywordsStack[i];
+            const nestedConstruction: TextRange = this.keywordsStack[i];
             if (!nestedConstruction) { continue; }
             this.result.push(createDiagnostic(
-                { range: nestedConstruction.range, uri: this.textDocument.uri }, DiagnosticSeverity.Error,
-                `${nestedConstruction.keyword} has no matching end${nestedConstruction.keyword}`,
+                nestedConstruction.range, DiagnosticSeverity.Error,
+                `${nestedConstruction.text} has no matching end${nestedConstruction.text}`,
             ));
         }
     }
@@ -264,7 +248,7 @@ export class Validator {
         this.checkFreemarker();
         const line: string = this.getCurrentLine();
         this.match = /(^[\t ]*\[)(\w+)\][\t ]*/.exec(line);
-        if (this.match || (/^\s*$/.test(line) && this.currentSection && this.currentSection.keyword === "tags")) {
+        if (this.match || (/^\s*$/.test(line) && this.currentSection && this.currentSection.text === "tags")) {
             this.handleSection();
         } else {
             this.match = /(^\s*)(\S+)\s*=\s*(.+)$/m.exec(line);
@@ -279,9 +263,9 @@ export class Validator {
     }
 
     private getLastKeyword(): string | undefined {
-        const stackHead: FoundKeyword = this.keywordsStack[this.keywordsStack.length - 1];
+        const stackHead: TextRange = this.keywordsStack[this.keywordsStack.length - 1];
 
-        return (stackHead) ? stackHead.keyword : undefined;
+        return (stackHead) ? stackHead.text : undefined;
     }
 
     private getLine(line: number): string | undefined {
@@ -307,16 +291,13 @@ export class Validator {
         this.setLastCondition();
         let message: string;
         if (!this.areWeIn("if")) {
-            message = `${this.foundKeyword.keyword} has no matching if`;
+            message = `${this.foundKeyword.text} has no matching if`;
         } else if (this.getLastKeyword() !== "if") {
             message =
-                `${this.foundKeyword.keyword} has started before ${this.getLastKeyword()} has finished`;
+                `${this.foundKeyword.text} has started before ${this.getLastKeyword()} has finished`;
         }
         if (message) {
-            this.result.push(createDiagnostic(
-                { range: this.foundKeyword.range, uri: this.textDocument.uri },
-                DiagnosticSeverity.Error, message,
-            ));
+            this.result.push(createDiagnostic(this.foundKeyword.range, DiagnosticSeverity.Error, message));
         }
     }
 
@@ -335,33 +316,28 @@ export class Validator {
             this.match = /^([ \t]*for[ \t]+\w+[ \t]+in[ \t]+)(?:Object\.keys\((\w+)\)|(\w+)).*$/im.exec(line);
             if (this.match) {
                 let position: number = Validator.CONTENT_POSITION;
-                const location: Location = Location.create(
-                    this.textDocument.uri, Range.create(
-                        this.currentLineNumber, this.match[1].length,
-                        this.currentLineNumber, this.match[1].length,
-                    ),
+                const range: Range = Range.create(
+                    this.currentLineNumber, this.match[1].length,
+                    this.currentLineNumber, this.match[1].length,
                 );
                 if (this.match[position]) {
-                    location.range.start.character += "Object.keys(".length;
-                    location.range.end.character += "Object.keys(".length;
+                    range.start.character += "Object.keys(".length;
+                    range.end.character += "Object.keys(".length;
                 } else {
                     position++;
                 }
                 const variable: string = this.match[position];
-                location.range.end.character += variable.length;
+                range.end.character += variable.length;
                 if (!isInMap(variable, this.variables)) {
                     const message: string = suggestionMessage(variable, mapToArray(this.variables));
-                    this.result.push(createDiagnostic(location, DiagnosticSeverity.Error, message));
+                    this.result.push(createDiagnostic(range, DiagnosticSeverity.Error, message));
                 }
             } else {
                 this.result.push(createDiagnostic(
-                    {
-                        range: {
-                            end: { character: matching[0].length + "  ".length, line: this.currentLineNumber },
-                            start: { character: matching[0].length + 1, line: this.currentLineNumber },
-                        },
-                        uri: this.textDocument.uri,
-                    },
+                    Range.create(
+                        Position.create(this.currentLineNumber, matching[0].length - "in".length),
+                        Position.create(this.currentLineNumber, matching[0].length),
+                    ),
                     DiagnosticSeverity.Error, "Empty 'in' statement",
                 ));
             }
@@ -414,24 +390,18 @@ export class Validator {
         this.previousSection = this.currentSection;
         this.settings = [];
         this.ifSettings.clear();
-        this.currentSection = {
-            keyword: this.match[Validator.CONTENT_POSITION],
-            range: {
-                end: {
-                    character: this.match[1].length + this.match[Validator.CONTENT_POSITION].length,
-                    line: this.currentLineNumber,
-                },
-                start: { character: this.match[1].length, line: this.currentLineNumber },
-            },
-        };
-        if (isInMap(this.currentSection.keyword, resources.parentSections)) {
-            this.parentSettings.set(this.currentSection.keyword, []);
+        this.currentSection = TextRange.create(this.match[Validator.CONTENT_POSITION], Range.create(
+            this.currentLineNumber, this.match[1].length,
+            this.currentLineNumber, this.match[1].length + this.match[Validator.CONTENT_POSITION].length,
+        ));
+        if (isInMap(this.currentSection.text, resources.parentSections)) {
+            this.parentSettings.set(this.currentSection.text, []);
         }
     }
 
     private handleSettings(): void {
         const line: string = this.getCurrentLine();
-        if (!this.currentSection || !/tags|keys/.test(this.currentSection.keyword)) {
+        if (!this.currentSection || !/tags|keys/.test(this.currentSection.text)) {
             // We are not in tags or keys section
             // Aliases
             this.match = /(^\s*alias\s*=\s*)(\w+)\s*$/m.exec(line);
@@ -439,15 +409,10 @@ export class Validator {
             this.match = /(^\s*value\s*=.*value\((['"]))(\w+)\2\).*$/.exec(line);
             const deAliasPosition: number = 3;
             if (this.match) {
-                this.deAliases.push({
-                    keyword: this.match[deAliasPosition], range: {
-                        end: {
-                            character: this.match[1].length + this.match[deAliasPosition].length,
-                            line: this.currentLineNumber,
-                        },
-                        start: { character: this.match[1].length, line: this.currentLineNumber },
-                    },
-                });
+                this.deAliases.push(TextRange.create(this.match[deAliasPosition], Range.create(
+                    this.currentLineNumber, this.match[1].length,
+                    this.currentLineNumber, this.match[1].length + this.match[deAliasPosition].length,
+                )));
             }
 
             this.match = /(^\s*)([-\w]+)\s*=/.exec(this.getCurrentLine());
@@ -480,16 +445,13 @@ export class Validator {
             map.set("possibleOptions", resources.possibleOptions);
             if (isInMap(setting, map)) {
                 this.result.push(createDiagnostic(
-                    {
-                        range: {
-                            end: {
-                                character: this.match[1].length + this.match[Validator.CONTENT_POSITION].length,
-                                line: this.currentLineNumber,
-                            },
-                            start: { character: this.match[1].length, line: this.currentLineNumber },
-                        },
-                        uri: this.textDocument.uri,
-                    },
+                    Range.create(
+                        Position.create(this.currentLineNumber, this.match[1].length),
+                        Position.create(
+                            this.currentLineNumber,
+                            this.match[1].length + this.match[Validator.CONTENT_POSITION].length,
+                        ),
+                    ),
                     DiagnosticSeverity.Information, `${this.match[Validator.CONTENT_POSITION]} is interpreted as a` +
                     " series tag and is sent to the server. Remove the setting from the [tags] section or enclose it" +
                     " double-quotes to suppress the warning.",
@@ -505,7 +467,7 @@ export class Validator {
     }
 
     private spellingCheck(): void {
-        if (this.currentSection && /tags?|keys/.test(this.currentSection.keyword)) { return; }
+        if (this.currentSection && /tags?|keys/.test(this.currentSection.text)) { return; }
         const line: string = this.getCurrentLine();
 
         /* statements like `[section] variable = value` aren't supported */
@@ -521,21 +483,17 @@ export class Validator {
             } else if (cleared.startsWith("column")) {
                 return;
             }
-            if (this.currentSection && this.currentSection.keyword === "placeholders") {
+            if (this.currentSection && this.currentSection.text === "placeholders") {
                 dictionary = dictionary.concat(this.urlParameters);
             }
             if (!isInArray(dictionary, cleared)) {
                 const message: string = suggestionMessage(word, dictionary);
                 this.result.push(createDiagnostic(
-                    {
-                        range: {
-                            end: { character: indent + word.length, line: this.currentLineNumber },
-                            start: { character: indent, line: this.currentLineNumber },
-                        },
-                        uri: this.textDocument.uri,
-                    },
-                    DiagnosticSeverity.Error,
-                    message,
+                    Range.create(
+                        Position.create(this.currentLineNumber, indent),
+                        Position.create(this.currentLineNumber, indent + word.length),
+                    ),
+                    DiagnosticSeverity.Error, message,
                 ));
             }
         }
@@ -543,14 +501,14 @@ export class Validator {
 
     private switchKeyword(): void {
         const line: string = this.getCurrentLine();
-        switch (this.foundKeyword.keyword) {
+        switch (this.foundKeyword.text) {
             case "endfor": this.handleEndFor();
             case "endif":
             case "endvar":
             case "endcsv":
             case "endlist":
             case "endscript": {
-                const expectedEnd: string = this.foundKeyword.keyword.substring("end".length);
+                const expectedEnd: string = this.foundKeyword.text.substring("end".length);
                 this.checkEnd(expectedEnd);
                 break;
             }
@@ -585,7 +543,7 @@ export class Validator {
                 this.handleScript();
                 break;
             }
-            default: throw new Error(`${this.foundKeyword.keyword} is not handled`);
+            default: throw new Error(`${this.foundKeyword.text} is not handled`);
         }
     }
 
@@ -594,13 +552,10 @@ export class Validator {
         const columns: number = countCsvColumns(line);
         if (columns !== this.csvColumns && !/^[ \t]*$/m.test(line)) {
             this.result.push(createDiagnostic(
-                {
-                    range: {
-                        end: { character: line.length, line: this.currentLineNumber },
-                        start: { character: 0, line: this.currentLineNumber },
-                    },
-                    uri: this.textDocument.uri,
-                },
+                Range.create(
+                    Position.create(this.currentLineNumber, 0),
+                    Position.create(this.currentLineNumber, line.length),
+                ),
                 DiagnosticSeverity.Error, `Expected ${this.csvColumns} columns, but found ${columns}`,
             ));
         }
@@ -625,19 +580,14 @@ export class Validator {
                     if (!isInMap(variable, this.variables)) {
                         const position: number = startPosition + this.match.index;
                         const message: string = suggestionMessage(variable, mapToArray(this.variables));
-                        this.result.push(createDiagnostic(
-                            {
-                                range: {
-                                    end: {
-                                        character: position + variable.length,
-                                        line: this.currentLineNumber,
-                                    },
-                                    start: { character: position, line: this.currentLineNumber },
-                                },
-                                uri: this.textDocument.uri,
-                            },
-                            DiagnosticSeverity.Error, message,
-                        ));
+                        this.result.push(
+                            createDiagnostic(
+                                Range.create(
+                                    Position.create(this.currentLineNumber, position),
+                                    Position.create(this.currentLineNumber, position + variable.length),
+                                ),
+                                DiagnosticSeverity.Error, message,
+                            ));
                     }
                     this.match = varRegexp.exec(substr);
                 }

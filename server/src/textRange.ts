@@ -1,6 +1,10 @@
-import { Range } from "vscode-languageserver";
+import { Position, Range } from "vscode-languageserver";
 
-export class FoundKeyword {
+export class TextRange {
+    public static create(text: string, range: Range): TextRange {
+        return { range, text };
+    }
+
     public static isCloseAble(line: string): boolean {
         return /^[ \t]*(?:for|if|list|var|script|csv)\b/.test(line);
     }
@@ -17,25 +21,21 @@ export class FoundKeyword {
         return /^[ \t]*else(?:if)?\b/.test(line);
     }
 
-    public static parse(line: string, i: number): FoundKeyword | undefined {
-        const match: RegExpExecArray = FoundKeyword.regexp.exec(line);
+    public static parse(line: string, i: number): TextRange | undefined {
+        const match: RegExpExecArray = TextRange.regexp.exec(line);
         if (match === null) { return undefined; }
         const keywordStart: number = match[1].length;
 
-        return {
-            keyword: match[this.KEYWORD_POSITION],
-            range: {
-                end: { character: keywordStart + match[this.KEYWORD_POSITION].length, line: i },
-                start: { character: keywordStart, line: i },
-            },
-        };
+        return TextRange.create(match[this.KEYWORD_POSITION], Range.create(
+            Position.create(i, keywordStart), Position.create(i, keywordStart + match[this.KEYWORD_POSITION].length),
+        ));
     }
 
     private static readonly KEYWORD_POSITION: number = 2;
     private static readonly regexp: RegExp =
         /^([ \t]*)(endvar|endcsv|endfor|elseif|endif|endscript|endlist|script|else|if|list|for|csv|var)\b/i;
 
-    public readonly keyword: string;
     public readonly range: Range;
+    public readonly text: string;
 
 }

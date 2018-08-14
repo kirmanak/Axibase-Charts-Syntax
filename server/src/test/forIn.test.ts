@@ -1,3 +1,4 @@
+/* tslint:disable:no-magic-numbers */
 import { DiagnosticSeverity, Range } from "vscode-languageserver";
 import { createDiagnostic, errorMessage } from "../util";
 import { Test } from "./test";
@@ -19,13 +20,7 @@ for srv in server
    #do something
 endfor`,
             [createDiagnostic(
-                {
-                    range: {
-                        end: { character: 17, line: 1 },
-                        start: { character: 11, line: 1 },
-                    },
-                    uri: Test.URI,
-                },
+                Range.create(1, "for srv in ".length, 1, "for srv in ".length + "server".length),
                 DiagnosticSeverity.Error, errorMessage("server", "servers"),
             )],
         ),
@@ -36,13 +31,7 @@ for srv in server
    #do something
 endfor`,
             [createDiagnostic(
-                {
-                    range: {
-                        end: { character: 17, line: 1 },
-                        start: { character: 11, line: 1 },
-                    },
-                    uri: Test.URI,
-                },
+                Range.create(1, "for srv in ".length, 1, "for srv in ".length + "server".length),
                 DiagnosticSeverity.Error, errorMessage("server", "servers"),
             )],
         ),
@@ -61,13 +50,7 @@ for srv in server
    #do something
 endfor`,
             [createDiagnostic(
-                {
-                    range: {
-                        end: { character: 17, line: 1 },
-                        start: { character: 11, line: 1 },
-                    },
-                    uri: Test.URI,
-                },
+                Range.create(1, "for srv in ".length, 1, "for srv in ".length + "server".length),
                 DiagnosticSeverity.Error, errorMessage("server", "servers"),
             )],
         ),
@@ -98,13 +81,7 @@ for srv in server
    #do something
 endfor`,
             [createDiagnostic(
-                {
-                    range: {
-                        end: { character: 17, line: 3 },
-                        start: { character: 11, line: 3 },
-                    },
-                    uri: Test.URI,
-                },
+                Range.create(3, "for srv in ".length, 3, "for srv in ".length + "server".length),
                 DiagnosticSeverity.Error, errorMessage("server", "servers"),
             )],
         ),
@@ -118,13 +95,7 @@ for srv in server
    #do something
 endfor`,
             [createDiagnostic(
-                {
-                    range: {
-                        end: { character: 17, line: 4 },
-                        start: { character: 11, line: 4 },
-                    },
-                    uri: Test.URI,
-                },
+                Range.create(4, "for srv in ".length, 4, "for srv in ".length + "server".length),
                 DiagnosticSeverity.Error, errorMessage("server", "servers"),
             )],
         ),
@@ -149,13 +120,7 @@ for srv in server
    #do something
 endfor`,
             [createDiagnostic(
-                {
-                    range: {
-                        end: { character: 17, line: 4 },
-                        start: { character: 11, line: 4 },
-                    },
-                    uri: Test.URI,
-                },
+                Range.create(4, "for srv in ".length, 4, "for srv in ".length + "server".length),
                 DiagnosticSeverity.Error, errorMessage("server", "servers"),
             )],
         ),
@@ -180,13 +145,7 @@ var servers = {
 }
 endvar`,
             [createDiagnostic(
-                {
-                    range: {
-                        end: { character: 18, line: 0 },
-                        start: { character: 11, line: 0 },
-                    },
-                    uri: Test.URI,
-                },
+                Range.create(0, "for srv in ".length, 0, "for srv in ".length + "servers".length),
                 DiagnosticSeverity.Error, errorMessage("servers", undefined),
             )],
         ),
@@ -200,13 +159,7 @@ var servers = {
 }
 endvar`,
             [createDiagnostic(
-                {
-                    range: {
-                        end: { character: 18, line: 0 },
-                        start: { character: 11, line: 0 },
-                    },
-                    uri: Test.URI,
-                },
+                Range.create(0, "for srv in ".length, 0, "for srv in ".length + "servers".length),
                 DiagnosticSeverity.Error, errorMessage("servers", undefined),
             )],
         ),
@@ -216,13 +169,7 @@ endvar`,
    #do something
 endfor`,
             [createDiagnostic(
-                {
-                    range: {
-                        end: { character: 12, line: 0 },
-                        start: { character: 11, line: 0 },
-                    },
-                    uri: Test.URI,
-                },
+                Range.create(0, "for srv ".length, 0, "for srv ".length + "in".length),
                 DiagnosticSeverity.Error, "Empty 'in' statement",
             )],
         ),
@@ -255,15 +202,9 @@ for agent in Object.keys(pps)
     metric = @{agent}
 endfor`,
             [createDiagnostic(
-                {
-                    range: Range.create(
-                        // tslint:disable-next-line:no-magic-numbers
-                        6, "for agent in Object.keys(".length,
-                        // tslint:disable-next-line:no-magic-numbers
-                        6, "for agent in Object.keys(".length + "pps".length,
-                    ),
-                    uri: Test.URI,
-                },
+                Range.create(
+                    6, "for agent in Object.keys(".length, 6, "for agent in Object.keys(".length + "pps".length,
+                ),
                 DiagnosticSeverity.Error, "pps is unknown. Suggestion: apps",
             )],
         ),
