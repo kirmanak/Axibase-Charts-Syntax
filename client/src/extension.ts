@@ -1,11 +1,17 @@
+import * as fs from "fs";
+import * as os from "os";
 import * as path from "path";
+import * as vscode from "vscode";
+
+const hash = require("object-hash");
+import { commands, Disposable, ExtensionContext, TextDocument, TextEditor, workspace } from "vscode";
 
 import {
-    commands, Disposable, ExtensionContext, TextDocument, TextEditor, ViewColumn, WebviewPanel, window, workspace,
-} from "vscode";
-
-import {
-    ForkOptions, LanguageClient, LanguageClientOptions, ServerOptions, TransportKind,
+    ForkOptions,
+    LanguageClient,
+    LanguageClientOptions,
+    ServerOptions,
+    TransportKind,
 } from "vscode-languageclient";
 
 let client: LanguageClient;
@@ -15,7 +21,7 @@ export const activate: (context: ExtensionContext) => void = (context: Extension
     // The server is implemented in node
     const serverModule: string = context.asAbsolutePath(path.join("server", "out", "server.js"));
     // The debug options for the server
-    const debugOptions: ForkOptions = { execArgv: ["--nolazy", "--inspect=6009"] };
+    const debugOptions: ForkOptions = {execArgv: ["--nolazy", "--inspect=6009"]};
 
     const tabSize: number = 2;
     workspace.getConfiguration()
@@ -26,14 +32,14 @@ export const activate: (context: ExtensionContext) => void = (context: Extension
     // If the extension is launched in debug mode then the debug server options are used
     // Otherwise the run options are used
     const serverOptions: ServerOptions = {
-        debug: { module: serverModule, options: debugOptions, transport: TransportKind.ipc },
-        run: { module: serverModule, transport: TransportKind.ipc },
+        debug: {module: serverModule, options: debugOptions, transport: TransportKind.ipc},
+        run: {module: serverModule, transport: TransportKind.ipc},
     };
 
     // Options to control the language client
     const clientOptions: LanguageClientOptions = {
         // Register the server for plain text documents
-        documentSelector: [{ language: "axibasecharts", scheme: "file" }],
+        documentSelector: [{language: "axibasecharts", scheme: "file"}],
         synchronize: {
             // Notify the server about file changes to ".clientrc files contain in the workspace
             fileEvents: workspace.createFileSystemWatcher("**/.clientrc"),
@@ -60,22 +66,28 @@ export const deactivate: () => Thenable<void> = (): Thenable<void> => {
 };
 
 class PreviewShower {
+
     public readonly id: string = "axibasecharts.showPortal";
+
     public showPreview: (editor: TextEditor) => void = (editor: TextEditor): void => {
+
         const document: TextDocument = editor.document;
         const url: string = workspace.getConfiguration()
             .get("axibaseCharts.url");
-        const panel: WebviewPanel = window.createWebviewPanel("portal", "Portal", ViewColumn.Beside, {
-            enableScripts: true,
-        });
-        panel.title = `Preview ${previewName(document.fileName)}`;
-        if (url === null) {
-            panel.webview.html = errorWebview;
 
-            return;
-        }
         const configuration: string = addUrl(replaceImports(document.getText(), url), url);
-        panel.webview.html = `<!DOCTYPE html>
+
+        const html: string = this.getHtml(url.replace(new RegExp("/.*@"), "//"), configuration);
+        const tmpPath: string = `${os.tmpdir()}/portal-${hash(document.fileName)}`;
+        fs.writeFile(tmpPath, html, {encoding: "utf8", flag: "w"}, () => {
+            vscode.commands.executeCommand(
+                "vscode.previewHtml", vscode.Uri.parse(`file://${tmpPath}`),
+                vscode.ViewColumn.Two, `Preview ${document.fileName}`);
+        });
+    }
+
+    private getHtml(url: string, configuration: string): string {
+        return `<!DOCTYPE html>
 <html>
 
 <head>
@@ -154,34 +166,30 @@ ${result.substr(match.index + match[0].length + 1)}`;
 
     return result;
 };
-
-const previewName: (fullName: string) => string =
-    (fullName: string): string => fullName.substr(fullName.lastIndexOf("/") + 1);
-
-const errorWebview: string = `< !DOCTYPE html >
-            <html>
-            <head><title>Error preview < /title></head >
-                <body>
-                To get preview specify the ATSD instance address in configuration "axibaseCharts.url"
-                    < /body>
-                    < /html>`;
-
 const deleteComments: (text: string) => string = (text: string): string => {
     let content: string = text;
     const multiLine: RegExp = /\/\*[\s\S]*?\*\//g;
     const oneLine: RegExp = /^[ \t]*#.*/mg;
     let i: RegExpExecArray = multiLine.exec(content);
-    if (!i) { i = oneLine.exec(content); }
+    if (!i) {
+        i = oneLine.exec(content);
+    }
 
     while (i) {
         let spaces: string = " ";
-        for (let j: number = 1; j < i[0].length; j++) { spaces += " "; }
+        for (let j: number = 1; j < i[0].length; j++) {
+            spaces += " ";
+        }
         const newLines: number = i[0].split("\n").length - 1;
-        for (let j: number = 0; j < newLines; j++) { spaces += "\n"; }
+        for (let j: number = 0; j < newLines; j++) {
+            spaces += "\n";
+        }
         content = content.substring(0, i.index) + spaces +
             content.substring(i.index + i[0].length);
         i = multiLine.exec(content);
-        if (!i) { i = oneLine.exec(content); }
+        if (!i) {
+            i = oneLine.exec(content);
+        }
     }
 
     return content;
