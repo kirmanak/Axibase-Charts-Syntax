@@ -3,12 +3,9 @@ import { Position, Range } from "vscode-languageserver";
 export class TextRange {
     public static readonly KEYWORD_REGEXP: RegExp =
         /^([ \t]*)(import|endvar|endcsv|endfor|elseif|endif|endscript|endlist|script|else|if|list|for|csv|var)\b/i;
-    public static create(text: string, range: Range): TextRange {
-        return { range, text };
-    }
 
     public static isCloseAble(line: string): boolean {
-        return /^[ \t]*(?:for|if|list|var|script|csv)\b/.test(line);
+        return /^[ \t]*(?:for|if|list|var|script|csv|else|elseif)\b/.test(line);
     }
 
     public static isClosing(line: string): boolean {
@@ -24,13 +21,13 @@ export class TextRange {
     }
 
     public static parse(line: string, i: number): TextRange | undefined {
-        const match: RegExpExecArray = TextRange.KEYWORD_REGEXP.exec(line);
-        if (match === null) {
+        const match: RegExpExecArray | null = TextRange.KEYWORD_REGEXP.exec(line);
+        if (!match) {
             return undefined;
         }
         const keywordStart: number = match[1].length;
 
-        return TextRange.create(match[this.KEYWORD_POSITION], Range.create(
+        return new TextRange(match[this.KEYWORD_POSITION], Range.create(
             Position.create(i, keywordStart), Position.create(i, keywordStart + match[this.KEYWORD_POSITION].length),
         ));
     }
@@ -39,5 +36,8 @@ export class TextRange {
 
     public readonly range: Range;
     public readonly text: string;
-
+    public constructor(text: string, range: Range) {
+        this.range = range;
+        this.text = text;
+    }
 }

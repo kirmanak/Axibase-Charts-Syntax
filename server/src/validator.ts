@@ -12,25 +12,24 @@ import {
 } from "./util";
 
 export class Validator {
-    private static readonly CONTENT_POSITION: number = 2;
     private aliases: string[] = [];
-    private csvColumns: number;
+    private csvColumns: number | undefined;
     private currentLineNumber: number = 0;
-    private currentSection: TextRange;
+    private currentSection: TextRange | undefined;
     private currentSettings: Setting[] = [];
     private deAliases: TextRange[] = [];
-    private foundKeyword: TextRange;
+    private foundKeyword: TextRange | undefined;
     private readonly ifSettings: Map<string, Setting[]> = new Map<string, Setting[]>();
     private readonly keywordsStack: TextRange[] = [];
-    private lastCondition: string;
+    private lastCondition: string | undefined;
     private readonly lines: string[];
-    private match: RegExpExecArray;
+    private match: RegExpExecArray | null | undefined;
     private readonly parentSettings: Map<string, Setting[]> = new Map<string, Setting[]>();
-    private previousSection: TextRange;
+    private previousSection: TextRange | undefined;
     private previousSettings: Setting[] = [];
-    private requiredSettings: Setting[][] = [];
+    private requiredSettings: Array<Array<Setting | undefined>> = [];
     private readonly result: Diagnostic[] = [];
-    private urlParameters: string[];
+    private urlParameters: string[] | undefined;
     private readonly variables: Map<string, string[]> = new Map<string, string[]>();
 
     public constructor(text: string) {
@@ -43,7 +42,8 @@ export class Validator {
      * @returns diagnostics for all found mistakes
      */
     public lineByLine(): Diagnostic[] {
-        this.lines.forEach((line: string, index: number) => {
+        this.lines.forEach(
+            (line: string, index: number) => {
             this.currentLineNumber = index;
             this.foundKeyword = TextRange.parse(line, this.currentLineNumber);
 
@@ -63,7 +63,9 @@ export class Validator {
 
                 this.switchKeyword();
             }
-        });
+        },
+            this,
+        );
 
         this.checkAliases();
         this.diagnosticForLeftKeywords();
@@ -90,10 +92,13 @@ export class Validator {
      * @param array the target array
      * @returns the array containing the setting from this.match
      */
-    private addToSettingArray(array: Setting[]): Setting[] {
+    private addToSettingArray(array?: Setting[]): Setting[] {
         const result: Setting[] = (array) ? array : [];
-        const name: string = this.match[Validator.CONTENT_POSITION];
-        const variable: Setting = getSetting(name);
+        if (!this.match) {
+            return result;
+        }
+        const name: string = this.match[2];
+        const variable: Setting | undefined = getSetting(name);
         if (!variable) {
             return result;
         }
@@ -124,7 +129,7 @@ export class Validator {
             return;
         }
         if (!isInMap(setting, this.parentSettings)) {
-            let array: Setting[] = this.parentSettings.get(key);
+            let array: Setting[] | undefined = this.parentSettings.get(key);
             if (!array) {
                 array = [];
             }
@@ -144,7 +149,7 @@ export class Validator {
         if (!this.match) {
             return result;
         }
-        const variable: string = this.match[Validator.CONTENT_POSITION];
+        const variable: string = this.match[2];
         if (array && array.includes(variable)) {
             this.result.push(createDiagnostic(
                 Range.create(
@@ -171,7 +176,7 @@ export class Validator {
      */
     private addToStringMap(map: Map<string, string[]>, key: string): Map<string, string[]> {
         if (!map || !key || !this.match) { return map; }
-        const variable: string = this.match[Validator.CONTENT_POSITION];
+        const variable: string = this.match[2];
         if (isInMap(variable, map)) {
             const startPosition: number = this.match.index + this.match[1].length;
             this.result.push(createDiagnostic(
@@ -182,7 +187,7 @@ export class Validator {
                 DiagnosticSeverity.Error, `${variable} is already defined`,
             ));
         } else {
-            let array: string[] = map.get(key);
+            let array: string[] | undefined = map.get(key);
             if (!array) {
                 array = [];
             }
@@ -223,7 +228,7 @@ export class Validator {
      * @param expectedEnd What the user has finished?
      */
     private checkEnd(expectedEnd: string): void {
-        const lastKeyword: string = this.getLastKeyword();
+        const lastKeyword: string | undefined = this.getLastKeyword();
         if (!expectedEnd || !this.foundKeyword) { return; }
         if (lastKeyword === expectedEnd) {
             this.keywordsStack.pop();
@@ -252,18 +257,21 @@ export class Validator {
      * @param setting the specified setting
      */
     private checkExcludes(setting: Setting): void {
-        this.currentSettings.forEach((item: Setting): void => {
+        if (!this.match) {
+            return;
+        }
+        for (const item of this.currentSettings) {
             if (setting.excludes.includes(item.displayName)) {
                 const range: Range = Range.create(
                     this.currentLineNumber, this.match[1].length,
-                    this.currentLineNumber, this.match[1].length + this.match[Validator.CONTENT_POSITION].length,
+                    this.currentLineNumber, this.match[1].length + this.match[2].length,
                 );
                 this.result.push(createDiagnostic(
                     range, DiagnosticSeverity.Error,
                     `${setting.displayName} can not be specified simultaneously with ${item.displayName}`,
                 ));
             }
-        });
+        }
     }
 
     /**
@@ -285,18 +293,49 @@ export class Validator {
     }
 
     /**
+     * Creates diagnostics for statements like `${variable}`
+     * where the `variable` is not defined
+     */
+    private checkFreemarkerValue(): void {
+        if (!this.match) {
+            return;
+        }
+        const line: string = this.getCurrentLine();
+        this.match = /\$\{(\w+).*\}/.exec(this.match[3]);
+        if (this.match) {
+            const settingName: string = this.match[1];
+            const freeMarkerVariables: string[] | undefined = this.variables.get("freemarker");
+            if (!freeMarkerVariables || !freeMarkerVariables.includes(settingName)) {
+                this.result.push(createDiagnostic(
+                    Range.create(
+                        this.currentLineNumber, line.indexOf(settingName),
+                        this.currentLineNumber, line.indexOf(settingName) + settingName.length,
+                    ),
+                    DiagnosticSeverity.Error, suggestionMessage(settingName, freeMarkerVariables),
+                ));
+            }
+        }
+    }
+
+    /**
      * Creates diagnostics if a section does not contain required settings
      */
     private checkPreviousSection(): void {
-        if (!this.currentSection) { return; }
-        this.requiredSettings =
-            this.requiredSettings.concat(requiredSectionSettingsMap.get(this.currentSection.text));
+        if (!this.currentSection) {
+            return;
+        }
+        const required: Array<Array<Setting | undefined>> | undefined =
+            requiredSectionSettingsMap.get(this.currentSection.text);
+        this.requiredSettings = (required) ? required.concat(this.requiredSettings) : this.requiredSettings;
         if (this.requiredSettings.length !== 0) {
             const notFound: string[] = [];
-            this.requiredSettings
-                .filter((options: Setting[]): boolean => options !== undefined && options !== null)
-                .forEach((options: Setting[]): void => {
-                    const displayName: string = options[0].displayName;
+            this.requiredSettings.forEach((options: Array<Setting | undefined>): void => {
+                if (options) {
+                    const setting: Setting | undefined = options[0];
+                    if (!setting) {
+                        return;
+                    }
+                    const displayName: string = setting.displayName;
                     if (isAnyInArray(options, this.currentSettings)) {
                         return;
                     }
@@ -325,13 +364,16 @@ export class Validator {
                             }
                         }
                         if (ifCounter !== elseCounter) { notFound.push(displayName); }
-                    } else { notFound.push(displayName); }
-                });
-            notFound.forEach((option: string) => {
+                    } else {
+                        notFound.push(displayName);
+                    }
+                }
+            });
+            for (const option of notFound) {
                 this.result.push(createDiagnostic(
                     this.currentSection.range, DiagnosticSeverity.Error, `${option} is required`,
                 ));
-            });
+            }
         }
         this.requiredSettings = [];
     }
@@ -341,14 +383,20 @@ export class Validator {
      * @param setting the setting to perform check
      */
     private checkRepetition(setting: Setting): void {
+        if (!this.match) {
+            return;
+        }
         const location: Range = Range.create(
             this.currentLineNumber, this.match[1].length,
-            this.currentLineNumber, this.match[1].length + this.match[Validator.CONTENT_POSITION].length,
+            this.currentLineNumber, this.match[1].length + this.match[2].length,
         );
-        const message: string = `${this.match[Validator.CONTENT_POSITION]} is already defined`;
+        const message: string = `${this.match[2]} is already defined`;
 
         if (this.areWeIn("if")) {
-            let array: Setting[] = this.ifSettings.get(this.lastCondition);
+            if (!this.lastCondition) {
+                throw new Error(`We are in if, but last condition is ${this.lastCondition}`);
+            }
+            let array: Setting[] | undefined = this.ifSettings.get(this.lastCondition);
             array = this.addToSettingArray(array);
             this.ifSettings.set(this.lastCondition, array);
             if (this.currentSettings && this.currentSettings.includes(setting)) {
@@ -374,7 +422,7 @@ export class Validator {
     private checkShadowing(setting: Setting): boolean {
         if (this.currentSection) {
             for (const parent of getParents(this.currentSection.text)) {
-                const parentSettings: Setting[] = this.parentSettings.get(parent);
+                const parentSettings: Setting[] | undefined = this.parentSettings.get(parent);
                 if (parentSettings && parentSettings.includes(setting)) {
                     return true;
                 }
@@ -412,12 +460,16 @@ export class Validator {
             }
             this.handleSection();
         } else {
-            this.match = /(^\s*)(.+?)\s*=\s*(.+?)\s*$/m.exec(line);
+            this.match = /(^\s*)([a-z].*?[a-z])\s*=\s*(.+?)\s*$/.exec(line);
             if (this.match) {
                 this.handleSettings();
                 if (this.areWeIn("for")) {
                     this.validateFor();
                 }
+            }
+            this.match = /(^\s*)<#(?:assign|list\s+(\w+)\s+as)\s+(\w+)/i.exec(line);
+            if (this.match) {
+                this.handleFreemarker();
             }
         }
     }
@@ -431,7 +483,7 @@ export class Validator {
         const deAliasPosition: number = 2;
         this.match = regexp.exec(line);
         while (this.match) {
-            this.deAliases.push(TextRange.create(this.match[deAliasPosition], Range.create(
+            this.deAliases.push(new TextRange(this.match[deAliasPosition], Range.create(
                 this.currentLineNumber, this.match.index + "value('".length,
                 this.currentLineNumber, this.match.index + "value('".length + this.match[deAliasPosition].length,
             )));
@@ -459,7 +511,12 @@ export class Validator {
      * @returns current line
      */
     private getCurrentLine(): string {
-        return this.getLine(this.currentLineNumber);
+        const line: string | undefined = this.getLine(this.currentLineNumber);
+        if (line === undefined) {
+            throw new Error(`Current line is ${line}`);
+        }
+
+        return line;
     }
 
     /**
@@ -485,12 +542,15 @@ export class Validator {
      * @returns undefined if setting is unknown, setting otherwise
      */
     private getSettingCheck(name: string): Setting | undefined {
-        const setting: Setting = getSetting(name);
+        if (!this.match) {
+            return;
+        }
+        const setting: Setting | undefined = getSetting(name);
         if (!setting) {
             if (TextRange.KEYWORD_REGEXP.test(name)) {
                 return undefined;
             }
-            let dictionary: string[] = [];
+            let dictionary: string[] | undefined = [];
             if (this.currentSection && this.currentSection.text === "placeholders") {
                 dictionary = this.urlParameters;
                 if (this.urlParameters && this.urlParameters.includes(name)) {
@@ -518,7 +578,7 @@ export class Validator {
      */
     private handleCsv(): void {
         const line: string = this.getCurrentLine();
-        let header: string;
+        let header: string | undefined;
         if (/=[ \t]*$/m.test(line)) {
             let j: number = this.currentLineNumber + 1;
             header = this.getLine(j);
@@ -526,7 +586,11 @@ export class Validator {
                 header = this.getLine(++j);
             }
         } else {
-            header = line.substring(/=/.exec(line).index + 1);
+            const match: RegExpExecArray | null = /=/.exec(line);
+            if (!match) {
+                throw new Error("The line does not contain a '='");
+            }
+            header = line.substring(match.index + 1);
         }
         this.match = /(^[ \t]*csv[ \t]+)(\w+)[ \t]*=/m.exec(line);
         this.addToStringMap(this.variables, "csvNames");
@@ -538,13 +602,15 @@ export class Validator {
      * or `if` is not the last keyword
      */
     private handleElse(): void {
+        if (!this.foundKeyword) {
+            throw new Error(`We're trying to handle 'else', but foundKeyword is ${this.foundKeyword}`);
+        }
         this.setLastCondition();
-        let message: string;
+        let message: string | undefined;
         if (!this.areWeIn("if")) {
             message = `${this.foundKeyword.text} has no matching if`;
         } else if (this.getLastKeyword() !== "if") {
-            message =
-                `${this.foundKeyword.text} has started before ${this.getLastKeyword()} has finished`;
+            message = `${this.foundKeyword.text} has started before ${this.getLastKeyword()} has finished`;
         }
         if (message) {
             this.result.push(createDiagnostic(this.foundKeyword.range, DiagnosticSeverity.Error, message));
@@ -555,7 +621,7 @@ export class Validator {
      * Removes the variable from the last `for`
      */
     private handleEndFor(): void {
-        let forVariables: string[] = this.variables.get("forVariables");
+        let forVariables: string[] | undefined = this.variables.get("forVariables");
         if (!forVariables) {
             forVariables = [];
         }
@@ -575,7 +641,7 @@ export class Validator {
             const matching: RegExpExecArray = this.match;
             this.match = /^([ \t]*for[ \t]+\w+[ \t]+in[ \t]+)(?:Object\.keys\((\w+)\)|(\w+)).*$/im.exec(line);
             if (this.match) {
-                let position: number = Validator.CONTENT_POSITION;
+                let position: number = 2;
                 const range: Range = Range.create(
                     this.currentLineNumber, this.match[1].length,
                     this.currentLineNumber, this.match[1].length,
@@ -607,11 +673,46 @@ export class Validator {
     }
 
     /**
+     * Adds new variables to the corresponding map,
+     * Checks if a variable is used before the definition
+     */
+    private handleFreemarker(): void {
+        if (!this.match) {
+            return;
+        }
+        // Initialize
+        const line: string = this.getCurrentLine();
+        let freeMarkerVariables: string[] | undefined = this.variables.get("freemarker");
+        if (!freeMarkerVariables) {
+            freeMarkerVariables = [];
+            this.variables.set("freemarker", freeMarkerVariables);
+        }
+
+        // Handle undefined variable used in <#list _here_ as
+        const listVariable: string | undefined = this.match[2];
+        if (listVariable && !freeMarkerVariables.includes(listVariable)) {
+            this.result.push(createDiagnostic(
+                Range.create(
+                    this.currentLineNumber, line.indexOf(listVariable),
+                    this.currentLineNumber, line.indexOf(listVariable) + listVariable.length,
+                ),
+                DiagnosticSeverity.Error, suggestionMessage(listVariable, freeMarkerVariables),
+            ));
+        }
+
+        this.match = /(^\s*<#(?:assign|list\s+\w+\s+as)\s+)(\w+)/i.exec(line);
+        this.addToStringMap(this.variables, "freemarker");
+    }
+
+    /**
      * Adds new variable to corresponding map,
      * Pushes a new keyword to the keyword stack
      * If necessary (`list hello = value1, value2` should not be closed)
      */
     private handleList(): void {
+        if (!this.foundKeyword) {
+            throw new Error(`We're trying to handle 'list', but foundKeyword is ${this.foundKeyword}`);
+        }
         const line: string = this.getCurrentLine();
         this.match = /(^\s*list\s+)(\w+)\s+=/.exec(line);
         this.addToStringMap(this.variables, "listNames");
@@ -619,11 +720,11 @@ export class Validator {
             this.keywordsStack.push(this.foundKeyword);
         } else {
             let j: number = this.currentLineNumber + 1;
-            while (this.getLine(j) && /^[ \t]*$/m.test(this.getLine(j))) {
-                j++;
+            let nextLine: string | undefined = this.getLine(j);
+            while (nextLine && /^[ \t]*$/m.test(nextLine)) {
+                nextLine = this.getLine(++j);
             }
-            if (this.getLine(j) &&
-                (/^[ \t]*,/.test(this.getLine(j)) || /\bendlist\b/.test(this.getLine(j)))) {
+            if (nextLine && (/^[ \t]*,/.test(nextLine) || /\bendlist\b/.test(nextLine))) {
                 this.keywordsStack.push(this.foundKeyword);
             }
         }
@@ -634,12 +735,18 @@ export class Validator {
      * (`script = console.log("Hello World!")` should not be closed)
      */
     private handleScript(): void {
+        if (!this.foundKeyword) {
+            throw new Error(`We're trying to handle 'script', but foundKeyword is ${this.foundKeyword}`);
+        }
         if (/^[ \t]*script[ \t]*=[ \t]*\S+.*$/m.test(this.getCurrentLine())) {
             let j: number = this.currentLineNumber + 1;
-            while (!(/\bscript\b/.test(this.getLine(j)) || /\bendscript\b/.test(this.getLine(j)))) {
-                if (!this.getLine(++j)) { break; }
+            let nextLine: string | undefined = this.getLine(j);
+            while (nextLine && !(/\bscript\b/.test(nextLine) || /\bendscript\b/.test(nextLine))) {
+                nextLine = this.getLine(++j);
             }
-            if (!this.getLine(j) || /\bscript\b/.test(this.getLine(j))) { return; }
+            if (nextLine === undefined || /\bscript\b/.test(nextLine)) {
+                return;
+            }
         }
         this.keywordsStack.push(this.foundKeyword);
     }
@@ -660,7 +767,7 @@ export class Validator {
 
             return;
         }
-        if (/widget/i.test(this.match[Validator.CONTENT_POSITION])) {
+        if (/widget/i.test(this.match[2])) {
             this.checkAliases();
             this.deAliases = [];
             this.aliases = [];
@@ -669,9 +776,9 @@ export class Validator {
         this.previousSection = this.currentSection;
         this.currentSettings = [];
         this.ifSettings.clear();
-        this.currentSection = TextRange.create(this.match[Validator.CONTENT_POSITION], Range.create(
+        this.currentSection = new TextRange(this.match[2], Range.create(
             this.currentLineNumber, this.match[1].length,
-            this.currentLineNumber, this.match[1].length + this.match[Validator.CONTENT_POSITION].length,
+            this.currentLineNumber, this.match[1].length + this.match[2].length,
         ));
 
         if (isInMap(this.currentSection.text, parentSections)) {
@@ -683,19 +790,28 @@ export class Validator {
      * Calls functions in proper order to handle a found setting
      */
     private handleSettings(): void {
+        if (!this.match) {
+            return;
+        }
         const line: string = this.getCurrentLine();
         if (!this.currentSection || !/(?:tag|key)s?/.test(this.currentSection.text)) {
             // We are not in tags or keys section
-            const name: string = this.match[Validator.CONTENT_POSITION];
-            const setting: Setting = this.getSettingCheck(name);
+            const name: string = this.match[2];
+            const setting: Setting | undefined = this.getSettingCheck(name);
             if (!setting) {
                 return;
             }
 
             if (setting.name === "table") {
-                this.requiredSettings.push([getSetting("attribute")]);
+                const attribute: Setting | undefined = getSetting("attribute");
+                if (attribute) {
+                    this.requiredSettings.push([attribute]);
+                }
             } else if (setting.name === "attribute") {
-                this.requiredSettings.push([getSetting("table")]);
+                const table: Setting | undefined = getSetting("table");
+                if (table) {
+                    this.requiredSettings.push([table]);
+                }
             }
 
             if (!setting.multiLine) {
@@ -705,28 +821,34 @@ export class Validator {
             this.typeCheck(setting);
             this.checkExcludes(setting);
 
+            if (setting.name === "urlparameters") {
+                this.findUrlParams();
+            } else {
+                this.checkFreemarkerValue();
+
+            }
             // Aliases
             if (setting.name === "alias") {
                 this.match = /(^\s*alias\s*=\s*)(\S+)\s*$/m.exec(line);
                 this.addToStringArray(this.aliases);
             }
             this.findDeAliases();
-            if (setting.name === "urlparameters") {
-                this.findUrlParams();
-            }
         } else if (this.currentSection &&
             // We are in tags/keys section
             /(?:tag|key)s?/.test(this.currentSection.text) &&
-            /(^[ \t]*)([a-z].*[a-z])[ \t]*=/.test(line)) {
-            this.match = /(^[ \t]*)([a-z].*[a-z])[ \t]*=/.exec(line);
-            const setting: Setting = getSetting(this.match[Validator.CONTENT_POSITION]);
+            /(^[ \t]*)([a-z].*?[a-z])[ \t]*=/.test(line)) {
+            this.match = /(^[ \t]*)([a-z].*?[a-z])[ \t]*=/.exec(line);
+            if (!this.match) {
+                return;
+            }
+            const setting: Setting | undefined = getSetting(this.match[2]);
             if (setting) {
                 this.result.push(createDiagnostic(
                     Range.create(
                         this.currentLineNumber, this.match[1].length,
-                        this.currentLineNumber, this.match[1].length + this.match[Validator.CONTENT_POSITION].length,
+                        this.currentLineNumber, this.match[1].length + this.match[2].length,
                     ),
-                    DiagnosticSeverity.Information, `${this.match[Validator.CONTENT_POSITION]} is interpreted as a` +
+                    DiagnosticSeverity.Information, `${this.match[2]} is interpreted as a` +
                     " series tag and is sent to the server. Remove the setting from the [tags] section or enclose it" +
                     " double-quotes to suppress the warning.",
                 ));
@@ -745,8 +867,11 @@ export class Validator {
      * Checks spelling mistakes in a section name
      */
     private spellingCheck(): void {
+        if (!this.match) {
+            return;
+        }
         const indent: number = this.match[1].length;
-        const word: string = this.match[Validator.CONTENT_POSITION];
+        const word: string = this.match[2];
         const dictionary: string[] = possibleSections;
         if (!dictionary.includes(word)) {
             this.result.push(createDiagnostic(
@@ -763,6 +888,9 @@ export class Validator {
      * Calls corresponding functions for the found keyword
      */
     private switchKeyword(): void {
+        if (!this.foundKeyword) {
+            throw new Error(`We're trying to handle a keyword, but foundKeyword is ${this.foundKeyword}`);
+        }
         const line: string = this.getCurrentLine();
         switch (this.foundKeyword.text) {
             case "endfor": this.handleEndFor();
@@ -816,14 +944,16 @@ export class Validator {
      * @param setting the setting to be checked
      */
     private typeCheck(setting: Setting): void {
-        const valuePosition: number = 3;
-        const settingValue: string = this.match[valuePosition];
+        if (!this.match) {
+            return;
+        }
+        const settingValue: string = this.match[3];
         switch (setting.type) {
             // tslint:disable-next-line:no-null-keyword
             case null:
             case undefined: return;
             case "string": {
-                if (this.match[valuePosition].length !== 0) {
+                if (settingValue.length !== 0) {
                     return;
                 }
                 break;
@@ -875,12 +1005,13 @@ export class Validator {
         this.result.push(createDiagnostic(
             Range.create(
                 this.currentLineNumber, this.match[1].length,
-                this.currentLineNumber, this.match[1].length + this.match[Validator.CONTENT_POSITION].length,
+                this.currentLineNumber, this.match[1].length + this.match[2].length,
             ),
             DiagnosticSeverity.Error, (setting.type === "enum") ?
                 `${settingValue} must be one of ${setting.enum.join(", ")}` :
-                `${this.match[Validator.CONTENT_POSITION]} type is ${setting.type}`,
+                `${this.match[2]} type is ${setting.type}`,
         ));
+
     }
 
     /**
